@@ -1,0 +1,16 @@
+# Core dependencies
+numpy>=1.21.0
+
+# For future deep learning implementations (optional)
+# torch>=1.10.0
+# tensorflow>=2.8.0
+# gym>=0.21.0
+
+# For enhanced visualization (optional)
+# pygame>=2.1.0
+# matplotlib>=3.3.0
+
+# For development (optional)
+# pytest>=6.2.0
+# black>=21.0
+# mypy>=0.900
