@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import Dict, Optional
 
 # Add project root to path
-project_root = os.path.dirname(os.path.abspath(__file__))
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
 sys.path.insert(0, project_root)
 
 import numpy as np
