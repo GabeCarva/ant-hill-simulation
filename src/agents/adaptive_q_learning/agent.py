@@ -1,4 +1,4 @@
-"""Adaptive Q-Learning agent with learning rate decay and improved hyperparameters."""
+"""Adaptive Q-Learning agent with learning rate decay - updated for independent ant control."""
 
 import pickle
 import random
@@ -19,6 +19,8 @@ class AdaptiveQLearningAgent(BaseAgent):
     - Configurable epsilon decay based on episode count
     - Better default hyperparameters
     - Performance tracking for debugging
+
+    Each ant acts independently using a shared Q-table.
     """
 
     def __init__(
@@ -26,7 +28,7 @@ class AdaptiveQLearningAgent(BaseAgent):
         player_id: int,
         learning_rate: float = 0.3,
         learning_rate_end: float = 0.001,
-        learning_rate_decay_type: str = "exponential",
+        learning_rate_decay_type: str = "polynomial",
         gamma: float = 0.95,
         epsilon_start: float = 1.0,
         epsilon_end: float = 0.05,
@@ -42,7 +44,7 @@ class AdaptiveQLearningAgent(BaseAgent):
             player_id: Player ID (0 or 1)
             learning_rate: Initial learning rate (alpha)
             learning_rate_end: Final learning rate (for decay)
-            learning_rate_decay_type: Type of decay ('exponential', 'polynomial', 'step')
+            learning_rate_decay_type: Type of decay ('exponential', 'polynomial', 'step', 'none')
             gamma: Discount factor for future rewards
             epsilon_start: Initial exploration rate
             epsilon_end: Minimum exploration rate
@@ -74,7 +76,7 @@ class AdaptiveQLearningAgent(BaseAgent):
         # Q-table: (state, action) -> Q-value
         self.q_table: Dict[Tuple, float] = defaultdict(float)
 
-        # Experience tracking for updates
+        # Experience tracking for updates (persists across get_action calls)
         self.previous_states: Dict[int, Tuple] = {}  # ant_id -> state
         self.previous_actions: Dict[int, int] = {}  # ant_id -> action
 
@@ -164,42 +166,38 @@ class AdaptiveQLearningAgent(BaseAgent):
             self.stats['epsilons'].append(self.epsilon)
             self.stats['q_table_sizes'].append(len(self.q_table))
 
-    def get_actions(
+    def get_action(
         self,
-        observations: List[AntObservation],
+        observation: AntObservation,
         game_state: GameState
-    ) -> Dict[int, int]:
+    ) -> int:
         """
-        Get actions for all ants using epsilon-greedy Q-learning.
+        Get action for a single ant using epsilon-greedy Q-learning.
 
         Args:
-            observations: List of observations for living ants
+            observation: Observation for ONE ant
             game_state: Current game state
 
         Returns:
-            Dictionary mapping ant_id -> action
+            Action ID
         """
-        actions = {}
+        obs = observation
+        state = self._get_state_key(obs)
 
-        for obs in observations:
-            state = self._get_state_key(obs)
+        # Epsilon-greedy action selection
+        if self.training and random.random() < self.epsilon:
+            # Explore: random valid action
+            valid_actions = self.get_valid_actions(obs, game_state)
+            action = random.choice(valid_actions) if valid_actions else Action.STAY
+        else:
+            # Exploit: choose best action
+            action = self._get_best_action(state, obs, game_state)
 
-            # Epsilon-greedy action selection
-            if self.training and random.random() < self.epsilon:
-                # Explore: random valid action
-                valid_actions = self.get_valid_actions(obs, game_state)
-                action = random.choice(valid_actions)
-            else:
-                # Exploit: choose best action
-                action = self._get_best_action(state, obs, game_state)
+        # Store for Q-value update
+        self.previous_states[obs.ant_id] = state
+        self.previous_actions[obs.ant_id] = action
 
-            actions[obs.ant_id] = action
-
-            # Store for Q-value update
-            self.previous_states[obs.ant_id] = state
-            self.previous_actions[obs.ant_id] = action
-
-        return actions
+        return action
 
     def _get_best_action(
         self,
@@ -217,7 +215,13 @@ class AdaptiveQLearningAgent(BaseAgent):
         }
 
         # Return action with highest Q-value
-        return max(q_values, key=q_values.get)
+        if q_values:
+            max_q = max(q_values.values())
+            # Break ties randomly
+            best_actions = [a for a, q in q_values.items() if q == max_q]
+            return random.choice(best_actions)
+        else:
+            return random.choice(valid_actions) if valid_actions else Action.STAY
 
     def update_q_values(
         self,
@@ -227,6 +231,8 @@ class AdaptiveQLearningAgent(BaseAgent):
     ):
         """
         Update Q-values based on observed rewards.
+
+        Call this after all ants have acted and received rewards.
 
         Args:
             rewards: Dictionary mapping ant_id -> reward
@@ -263,7 +269,7 @@ class AdaptiveQLearningAgent(BaseAgent):
                 # Get max Q-value for next state
                 max_next_q = max(
                     self.q_table.get((next_state, a), 0.0)
-                    for a in range(5)  # 5 possible actions
+                    for a in range(9)  # 9 possible actions (including STAY)
                 )
 
                 target_q = reward + self.gamma * max_next_q
@@ -280,6 +286,9 @@ class AdaptiveQLearningAgent(BaseAgent):
 
     def save(self, path: str):
         """Save agent state to file."""
+        import os
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
         state = {
             'q_table': dict(self.q_table),
             'learning_rate': self.learning_rate,
@@ -308,7 +317,7 @@ class AdaptiveQLearningAgent(BaseAgent):
         self.learning_rate = state.get('learning_rate', self.learning_rate)
         self.learning_rate_initial = state.get('learning_rate_initial', self.learning_rate_initial)
         self.learning_rate_end = state.get('learning_rate_end', self.learning_rate_end)
-        self.learning_rate_decay_type = state.get('learning_rate_decay_type', 'exponential')
+        self.learning_rate_decay_type = state.get('learning_rate_decay_type', 'polynomial')
         self.epsilon = state.get('epsilon', self.epsilon)
         self.epsilon_start = state.get('epsilon_start', self.epsilon_start)
         self.epsilon_end = state.get('epsilon_end', self.epsilon_end)
