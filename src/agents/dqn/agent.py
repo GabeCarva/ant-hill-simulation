@@ -7,20 +7,14 @@ from collections import deque
 import json
 import os
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+
 from src.agents.base import BaseAgent, AntObservation
 from src.core.game import GameState
 from src.utils.game_config import Action
-
-# PyTorch imports (will be conditional based on availability)
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    import torch.nn.functional as F
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    print("Warning: PyTorch not available. DQN agent will not work.")
 
 
 class DQN(nn.Module):
@@ -67,8 +61,8 @@ class DQN(nn.Module):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         
-        # Flatten
-        x = x.view(x.size(0), -1)
+        # Flatten - using reshape to avoid contiguous memory issues
+        x = x.reshape(x.size(0), -1)
         
         # Fully connected layers
         x = F.relu(self.fc1(x))
@@ -148,9 +142,6 @@ class DQNAgent(BaseAgent):
             model_path: Path to load pre-trained model
         """
         super().__init__(player_id)
-        
-        if not TORCH_AVAILABLE:
-            raise RuntimeError("PyTorch is required for DQN agent")
         
         self.input_shape = input_shape
         self.num_actions = len(Action.DIRECTIONS)

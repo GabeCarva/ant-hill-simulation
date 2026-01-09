@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Main training script for ant colony agents."""
 
 import argparse
@@ -17,22 +18,9 @@ import numpy as np
 from src.utils.game_config import GameConfig
 from src.environments.training import TrainingEnvironment, SelfPlayEnvironment, CurriculumEnvironment
 from src.agents.random.agent import RandomAgent, SmartRandomAgent
+from src.agents.dqn.agent import DQNAgent
+from src.agents.ppo.agent import PPOAgent
 from src.visualization.ascii_viz import ASCIIVisualizer
-
-# Try to import deep learning agents
-try:
-    from src.agents.dqn.agent import DQNAgent
-    DQN_AVAILABLE = True
-except ImportError:
-    DQN_AVAILABLE = False
-    print("Warning: DQN agent not available (PyTorch not installed)")
-
-try:
-    from src.agents.ppo.agent import PPOAgent
-    PPO_AVAILABLE = True
-except ImportError:
-    PPO_AVAILABLE = False
-    print("Warning: PPO agent not available (PyTorch not installed)")
 
 
 class Trainer:
@@ -119,8 +107,6 @@ class Trainer:
     def _create_agent(self, player_id: int):
         """Create agent to train."""
         if self.agent_type == "dqn":
-            if not DQN_AVAILABLE:
-                raise ValueError("DQN agent requires PyTorch")
             return DQNAgent(
                 player_id=player_id,
                 input_shape=(3, 3, 3),
@@ -132,8 +118,6 @@ class Trainer:
                 device=self.device
             )
         elif self.agent_type == "ppo":
-            if not PPO_AVAILABLE:
-                raise ValueError("PPO agent requires PyTorch")
             return PPOAgent(
                 player_id=player_id,
                 input_shape=(3, 3, 3),

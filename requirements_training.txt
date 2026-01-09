@@ -1,4 +1,4 @@
-ven# Core dependencies (required)
+# Core dependencies (required)
 numpy>=1.21.0
 
 # For deep learning training (optional)
