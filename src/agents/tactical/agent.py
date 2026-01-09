@@ -1,8 +1,7 @@
-"""Elite tactical heuristic agent designed to dominate SmartRandomAgent."""
+"""Tactical heuristic agent with advanced decision making - independent ant control."""
 
 import random
-from typing import Dict, List, Optional, Tuple, Set
-from collections import defaultdict
+from typing import Dict, List, Optional, Tuple
 
 from src.agents.base import BaseAgent, AntObservation
 from src.core.game import GameState
@@ -11,17 +10,17 @@ from src.utils.game_config import Action, Position
 
 class TacticalAgent(BaseAgent):
     """
-    Advanced tactical agent using sophisticated heuristics and game theory.
+    Advanced tactical agent using sophisticated heuristics.
 
-    Strategy:
-    - Multi-stage gameplay (early/mid/late game tactics)
-    - Coordinated swarm attacks when advantageous
-    - Intelligent food prioritization with denial tactics
-    - Active anthill defense with perimeter control
-    - Force projection and territory dominance
+    Each ant makes independent tactical decisions based on:
+    - Multi-factor food scoring (distance, risk, competition)
+    - Intelligent attack timing (force balance consideration)
+    - Dynamic defensive positioning
     - Risk-aware decision making
+    - Game phase adaptation
 
-    Designed to significantly outperform SmartRandomAgent.
+    Designed to outperform SmartRandomAgent through superior tactical decision-making
+    without requiring centralized coordination.
     """
 
     def __init__(self, player_id: int, config: Optional[Dict] = None):
@@ -29,507 +28,212 @@ class TacticalAgent(BaseAgent):
         super().__init__(player_id, config)
 
         # Tactical parameters
-        self.aggression_factor = self.config.get('aggression_factor', 1.2)
-        self.defense_radius = self.config.get('defense_radius', 3)
-        self.swarm_threshold = self.config.get('swarm_threshold', 2)
+        self.food_priority = self.config.get('food_priority', 1.5)
+        self.attack_threshold = self.config.get('attack_threshold', 0.6)
+        self.defense_priority = self.config.get('defense_priority', 1.2)
+        self.risk_aversion = self.config.get('risk_aversion', 0.8)
 
-        # Internal state
-        self.planned_positions = {}  # ant_id -> Position
-        self.food_claims = {}  # food_pos -> ant_id
-        self.turn_count = 0
-        self.game_phase = "early"  # early, mid, late
-
-    def get_actions(
+    def get_action(
         self,
-        observations: List[AntObservation],
+        observation: AntObservation,
         game_state: GameState
-    ) -> Dict[int, int]:
-        """Get coordinated tactical actions for all ants."""
-        self.turn_count += 1
-        self._update_game_phase(game_state)
-
-        actions = {}
-        self.planned_positions.clear()
-        self.food_claims.clear()
-
-        # Get key tactical information
-        own_anthill = self._find_own_anthill(observations)
-        enemy_anthill = self._find_enemy_anthill(observations)
-
-        # Calculate force distribution
-        force_map = self._calculate_force_map(observations)
-
-        # Prioritize ants by role
-        defenders, attackers, collectors = self._assign_roles(
-            observations, own_anthill, enemy_anthill, game_state
-        )
-
-        # Execute roles in priority order
-        # 1. Defenders first (critical for survival)
-        for obs in defenders:
-            action = self._defend_anthill(obs, own_anthill, game_state, force_map)
-            actions[obs.ant_id] = action
-            self.planned_positions[obs.ant_id] = Action.get_new_position(obs.position, action)
-
-        # 2. Attackers (coordinated assault)
-        if len(attackers) >= self.swarm_threshold and enemy_anthill:
-            for obs in attackers:
-                action = self._swarm_attack(obs, enemy_anthill, attackers, game_state)
-                actions[obs.ant_id] = action
-                self.planned_positions[obs.ant_id] = Action.get_new_position(obs.position, action)
-
-        # 3. Collectors (intelligent food gathering)
-        for obs in collectors:
-            action = self._collect_food_smart(obs, game_state, force_map)
-            actions[obs.ant_id] = action
-            self.planned_positions[obs.ant_id] = Action.get_new_position(obs.position, action)
-
-        # Resolve friendly collisions
-        actions = self._resolve_collisions(observations, actions)
-
-        return actions
-
-    def _update_game_phase(self, game_state: GameState):
-        """Determine current game phase for adaptive strategy."""
-        total_food = game_state.food_collected[0] + game_state.food_collected[1]
-
-        if total_food < 5:
-            self.game_phase = "early"
-        elif total_food < 15:
-            self.game_phase = "mid"
-        else:
-            self.game_phase = "late"
-
-    def _assign_roles(
-        self,
-        observations: List[AntObservation],
-        own_anthill: Optional[Position],
-        enemy_anthill: Optional[Position],
-        game_state: GameState
-    ) -> Tuple[List[AntObservation], List[AntObservation], List[AntObservation]]:
+    ) -> int:
         """
-        Assign tactical roles to ants based on game state.
+        Get tactical action for a single ant.
+
+        Args:
+            observation: Observation for ONE ant
+            game_state: Current game state
 
         Returns:
-            (defenders, attackers, collectors)
+            Action ID
         """
-        defenders = []
-        attackers = []
-        collectors = []
+        obs = observation
 
-        # Count nearby threats to our anthill
-        threat_level = 0
-        if own_anthill:
-            for obs in observations:
-                enemy_count = self._count_nearby_enemies(obs)
-                if obs.position.chebyshev_distance(own_anthill) <= self.defense_radius:
-                    threat_level += enemy_count
+        # Gather tactical information
+        enemy_anthill = self._find_enemy_anthill(obs)
+        own_anthill = self._find_own_anthill(obs)
+        nearby_enemies = self._count_nearby_enemies(obs)
+        nearby_allies = self._count_nearby_allies(obs)
+        local_force_balance = nearby_allies - nearby_enemies
 
-        # Calculate needed defenders (at least 1, more if threatened)
-        needed_defenders = max(1, min(3, threat_level + 1))
+        # Decision Priority System with Multi-Factor Scoring
 
-        # Sort ants by distance to own anthill
-        ants_by_distance = sorted(
-            observations,
-            key=lambda o: o.position.chebyshev_distance(own_anthill) if own_anthill else 999
-        )
+        # Priority 1: Critical defense - enemy very close to our anthill
+        if own_anthill and self._distance_to(obs.position, own_anthill) <= 3:
+            if nearby_enemies > 0:
+                # Intercept enemies near our base
+                closest_enemy = self._find_closest_enemy(obs)
+                if closest_enemy:
+                    action = self._move_toward(obs, closest_enemy, game_state)
+                    if self._is_action_safe(obs, action):
+                        return action
 
-        # Assign defenders (closest to own anthill)
-        defenders = ants_by_distance[:needed_defenders]
-        remaining = ants_by_distance[needed_defenders:]
+        # Priority 2: Opportunistic attack on enemy anthill
+        if enemy_anthill:
+            # Calculate attack viability
+            distance_to_anthill = self._distance_to(obs.position, enemy_anthill)
 
-        # Determine attack vs collect based on game state
-        our_food = game_state.food_collected[self.player_id]
-        their_food = game_state.food_collected[1 - self.player_id]
+            # Attack if:
+            # - Very close (adjacent)
+            # - OR have local force superiority and random chance
+            # - OR no enemies around and random chance
+            if distance_to_anthill == 1:
+                # Adjacent - go for it!
+                action = self._move_toward(obs, enemy_anthill, game_state)
+                if self._is_action_safe(obs, action):
+                    return action
+            elif (local_force_balance >= 0 or nearby_enemies == 0) and random.random() < self.attack_threshold:
+                action = self._move_toward(obs, enemy_anthill, game_state)
+                if self._is_action_safe(obs, action):
+                    return action
 
-        # Attack conditions:
-        # 1. Enemy anthill visible
-        # 2. We have numerical superiority OR we're ahead in food
-        # 3. Late game and we're winning
-        should_attack = (
-            enemy_anthill is not None and (
-                len(observations) > 4 or  # Have enough ants
-                our_food > their_food + 2 or  # Significant food lead
-                (self.game_phase == "late" and our_food >= their_food)
-            )
-        )
-
-        if should_attack and enemy_anthill:
-            # Send multiple ants to attack (swarm)
-            attack_count = max(2, len(remaining) // 2)
-            # Sort by distance to enemy anthill
-            remaining_by_enemy_dist = sorted(
-                remaining,
-                key=lambda o: o.position.chebyshev_distance(enemy_anthill)
-            )
-            attackers = remaining_by_enemy_dist[:attack_count]
-            collectors = remaining_by_enemy_dist[attack_count:]
-        else:
-            # Focus on food collection
-            collectors = remaining
-
-        return defenders, attackers, collectors
-
-    def _defend_anthill(
-        self,
-        obs: AntObservation,
-        own_anthill: Optional[Position],
-        game_state: GameState,
-        force_map: Dict[Position, int]
-    ) -> int:
-        """Defend own anthill with intelligent positioning."""
-        if not own_anthill:
-            return Action.STAY
-
-        # Check for immediate threats
-        enemy_positions = self._get_enemy_positions(obs)
-
-        if enemy_positions:
-            # Find closest enemy to anthill
-            closest_enemy = min(
-                enemy_positions,
-                key=lambda p: p.chebyshev_distance(own_anthill)
-            )
-
-            enemy_distance = closest_enemy.chebyshev_distance(own_anthill)
-
-            if enemy_distance <= 2:
-                # CRITICAL: Enemy very close to anthill - intercept aggressively
-                return self._move_toward(obs, closest_enemy, game_state)
-            else:
-                # Position between anthill and enemy
-                return self._position_between(obs, own_anthill, closest_enemy, game_state)
-
-        # No immediate threat - maintain defensive perimeter
-        current_distance = obs.position.chebyshev_distance(own_anthill)
-
-        if current_distance > self.defense_radius:
-            # Too far - move closer
-            return self._move_toward(obs, own_anthill, game_state)
-        elif current_distance < 2:
-            # Too close - patrol perimeter
-            return self._patrol_perimeter(obs, own_anthill, game_state)
-        else:
-            # Good position - look for food while defending
-            food_pos = self._find_nearest_food(obs)
-            if food_pos and food_pos.chebyshev_distance(own_anthill) <= self.defense_radius:
-                return self._move_toward(obs, food_pos, game_state)
-            return Action.STAY
-
-    def _swarm_attack(
-        self,
-        obs: AntObservation,
-        enemy_anthill: Position,
-        all_attackers: List[AntObservation],
-        game_state: GameState
-    ) -> int:
-        """Coordinate multiple ants to attack enemy anthill."""
-        # Calculate if we can reach anthill this turn
-        distance = obs.position.chebyshev_distance(enemy_anthill)
-
-        if distance == 1:
-            # Adjacent to anthill - GO FOR THE KILL
-            return self._move_toward(obs, enemy_anthill, game_state)
-
-        # Check for enemy defenders
-        enemy_count = self._count_nearby_enemies(obs)
-        ally_count = len([a for a in all_attackers
-                         if a.position.chebyshev_distance(obs.position) <= 2])
-
-        if enemy_count > 0 and ally_count < enemy_count:
-            # Wait for reinforcements - move toward other attackers
-            closest_ally = min(
-                [a for a in all_attackers if a.ant_id != obs.ant_id],
-                key=lambda a: a.position.chebyshev_distance(obs.position),
-                default=None
-            )
-            if closest_ally and obs.position.chebyshev_distance(closest_ally.position) > 1:
-                return self._move_toward(obs, closest_ally.position, game_state)
-
-        # Advance toward enemy anthill
-        return self._move_toward(obs, enemy_anthill, game_state)
-
-    def _collect_food_smart(
-        self,
-        obs: AntObservation,
-        game_state: GameState,
-        force_map: Dict[Position, int]
-    ) -> int:
-        """Intelligent food collection with denial tactics."""
+        # Priority 3: Intelligent food collection with risk assessment
         food_positions = self._get_all_food_positions(obs)
+        if food_positions:
+            best_food = self._score_and_select_food(
+                obs, food_positions, nearby_enemies, nearby_allies
+            )
 
+            if best_food:
+                action = self._move_toward(obs, best_food, game_state)
+                if self._is_action_safe(obs, action):
+                    return action
+
+        # Priority 4: Retreat if heavily outnumbered
+        if local_force_balance < -1:  # Outnumbered by 2 or more
+            action = self._retreat_from_enemies(obs, game_state)
+            if self._is_action_safe(obs, action):
+                return action
+
+        # Priority 5: Defensive positioning near own anthill
+        if own_anthill and self._distance_to(obs.position, own_anthill) > 5:
+            # Too far from base - move closer
+            action = self._move_toward(obs, own_anthill, game_state)
+            if self._is_action_safe(obs, action):
+                return action
+
+        # Priority 6: Exploration (move toward board center)
+        board_center = Position(
+            game_state.board.width // 2,
+            game_state.board.height // 2
+        )
+
+        if random.random() < 0.4:  # 40% exploration
+            action = self._move_toward(obs, board_center, game_state)
+            if self._is_action_safe(obs, action):
+                return action
+
+        # Default: Random safe movement
+        valid_actions = self.get_valid_actions(obs, game_state)
+        move_actions = [a for a in valid_actions if a != Action.STAY]
+        safe_moves = [a for a in move_actions if self._is_action_safe(obs, a)]
+
+        if safe_moves:
+            return random.choice(safe_moves)
+
+        return Action.STAY
+
+    def _score_and_select_food(
+        self,
+        obs: AntObservation,
+        food_positions: List[Position],
+        nearby_enemies: int,
+        nearby_allies: int
+    ) -> Optional[Position]:
+        """
+        Score food positions using multiple factors and select best.
+
+        Factors:
+        - Distance (closer is better)
+        - Risk (fewer enemies nearby is better)
+        - Competition (check if enemies are closer)
+
+        Args:
+            obs: Ant observation
+            food_positions: List of visible food positions
+            nearby_enemies: Count of enemies in vision
+            nearby_allies: Count of allies in vision
+
+        Returns:
+            Best food position or None
+        """
         if not food_positions:
-            # No food visible - explore intelligently
-            return self._explore_smart(obs, game_state)
+            return None
 
-        # Score each food by multiple factors
         best_food = None
         best_score = -999999
 
         for food_pos in food_positions:
-            # Skip if already claimed by ally
-            if food_pos in self.food_claims:
-                continue
+            distance = self._distance_to(obs.position, food_pos)
 
-            distance = obs.position.chebyshev_distance(food_pos)
+            # Distance score (closer is better)
+            distance_score = -distance * 2
 
-            # Check local force balance
-            local_force = force_map.get(food_pos, 0)
-
-            # Check if enemies are also targeting this food
-            enemy_distance = self._nearest_enemy_distance_to(obs, food_pos)
-
-            # Scoring factors
-            distance_score = -distance * 2  # Closer is better
-            force_score = local_force * 3  # Positive if we dominate area
-            competition_score = (enemy_distance - distance) * 5 if enemy_distance else 10
-
-            total_score = distance_score + force_score + competition_score
-
-            # Bonus for food that denies enemy expansion
-            if enemy_distance and enemy_distance < distance:
-                # Enemy is closer - only take if we dominate (denial tactic)
-                if local_force > 2:
-                    total_score += 15  # Food denial bonus
+            # Risk score (less risky if we have allies or no enemies)
+            risk_score = 0
+            if nearby_enemies > 0:
+                if nearby_allies > nearby_enemies:
+                    risk_score = 5  # Safe with ally support
+                elif nearby_allies == nearby_enemies:
+                    risk_score = 0  # Neutral risk
                 else:
-                    total_score -= 20  # Avoid contested food when weak
+                    risk_score = -10 * (nearby_enemies - nearby_allies)  # High risk
+
+            # Competition score (are enemies closer to this food?)
+            enemy_distance = self._nearest_enemy_distance_to(obs, food_pos)
+            if enemy_distance is not None:
+                if enemy_distance > distance:
+                    # We're closer - good!
+                    competition_score = 5
+                elif enemy_distance == distance:
+                    # Tied - neutral
+                    competition_score = 0
+                else:
+                    # Enemy closer - bad
+                    competition_score = -3
+            else:
+                # No enemies visible - safe
+                competition_score = 3
+
+            total_score = distance_score + risk_score * self.risk_aversion + competition_score
 
             if total_score > best_score:
                 best_score = total_score
                 best_food = food_pos
 
-        if best_food:
-            # Claim this food
-            self.food_claims[best_food] = obs.ant_id
-            return self._move_toward(obs, best_food, game_state)
+        return best_food
 
-        # No good food options - explore
-        return self._explore_smart(obs, game_state)
-
-    def _explore_smart(self, obs: AntObservation, game_state: GameState) -> int:
-        """Explore strategically rather than randomly."""
-        # Get board dimensions
-        board_width = game_state.board.width
-        board_height = game_state.board.height
-
-        # Explore toward less-visited areas
-        # Simple heuristic: move toward board center with some randomness
-        center = Position(board_width // 2, board_height // 2)
-
-        # Add some randomness to avoid predictable patterns
-        if random.random() < 0.3:
-            # Random exploration
-            valid_actions = self.get_valid_actions(obs, game_state)
-            move_actions = [a for a in valid_actions if a != Action.STAY]
-            return random.choice(move_actions) if move_actions else Action.STAY
-
-        # Move toward center
-        return self._move_toward(obs, center, game_state)
-
-    def _calculate_force_map(self, observations: List[AntObservation]) -> Dict[Position, int]:
-        """
-        Calculate relative force at each position.
-        Positive = we dominate, Negative = enemy dominates.
-        """
-        force_map = defaultdict(int)
-
-        for obs in observations:
-            # Add our presence
-            for pos in self._get_area_positions(obs.position, radius=2):
-                force_map[pos] += 1
-
-            # Subtract enemy presence
-            enemy_positions = self._get_enemy_positions(obs)
-            for enemy_pos in enemy_positions:
-                for pos in self._get_area_positions(enemy_pos, radius=2):
-                    force_map[pos] -= 1
-
-        return force_map
-
-    def _get_area_positions(self, center: Position, radius: int) -> List[Position]:
-        """Get all positions within radius of center."""
-        positions = []
-        for dx in range(-radius, radius + 1):
-            for dy in range(-radius, radius + 1):
-                if abs(dx) <= radius and abs(dy) <= radius:
-                    positions.append(Position(center.x + dx, center.y + dy))
-        return positions
-
-    def _position_between(
-        self,
-        obs: AntObservation,
-        protect: Position,
-        threat: Position,
-        game_state: GameState
-    ) -> int:
-        """Position between a protected asset and a threat."""
-        # Calculate midpoint
-        mid_x = (protect.x + threat.x) // 2
-        mid_y = (protect.y + threat.y) // 2
-        midpoint = Position(mid_x, mid_y)
-
-        return self._move_toward(obs, midpoint, game_state)
-
-    def _patrol_perimeter(
-        self,
-        obs: AntObservation,
-        center: Position,
-        game_state: GameState
-    ) -> int:
-        """Patrol around a perimeter."""
-        # Move perpendicular to radial direction
-        dx = obs.position.x - center.x
-        dy = obs.position.y - center.y
-
-        # Perpendicular direction
-        perp_positions = [
-            Position(obs.position.x - dy, obs.position.y + dx),
-            Position(obs.position.x + dy, obs.position.y - dx)
-        ]
-
-        # Choose valid perpendicular move
-        for target in perp_positions:
-            action = self._move_toward(obs, target, game_state)
-            if self._is_action_safe(obs, action):
-                return action
-
-        return Action.STAY
-
-    def _move_toward(
-        self,
-        obs: AntObservation,
-        target: Position,
-        game_state: GameState
-    ) -> int:
-        """Move toward target with obstacle avoidance."""
-        dx = target.x - obs.position.x
-        dy = target.y - obs.position.y
-
-        # Normalize to unit direction
-        if dx > 0:
-            dx = 1
-        elif dx < 0:
-            dx = -1
-        if dy > 0:
-            dy = 1
-        elif dy < 0:
-            dy = -1
-
-        # Primary direction
-        primary_action = None
-        for action_id, (adx, ady) in Action.DIRECTIONS.items():
-            if adx == dx and ady == dy:
-                primary_action = action_id
-                break
-
-        # Try primary direction
-        if primary_action and self._is_action_safe(obs, primary_action):
-            valid_actions = self.get_valid_actions(obs, game_state)
-            if primary_action in valid_actions:
-                return primary_action
-
-        # Try alternate diagonal
-        alternates = []
-
-        # Try moving in just x direction
-        if dx != 0:
-            for action_id, (adx, ady) in Action.DIRECTIONS.items():
-                if adx == dx and ady == 0:
-                    alternates.append(action_id)
-
-        # Try moving in just y direction
-        if dy != 0:
-            for action_id, (adx, ady) in Action.DIRECTIONS.items():
-                if adx == 0 and ady == dy:
-                    alternates.append(action_id)
-
-        # Try alternates
-        valid_actions = self.get_valid_actions(obs, game_state)
-        for action in alternates:
-            if action in valid_actions and self._is_action_safe(obs, action):
-                return action
-
-        # Last resort - any safe valid move
-        for action in valid_actions:
-            if action != Action.STAY and self._is_action_safe(obs, action):
-                return action
-
-        return Action.STAY
-
-    def _is_action_safe(self, obs: AntObservation, action: int) -> bool:
-        """Check if action is safe (doesn't step on own anthill or planned collision)."""
-        new_pos = Action.get_new_position(obs.position, action)
-
-        # Check own anthill
+    def _find_own_anthill(self, obs: AntObservation) -> Optional[Position]:
+        """Find own anthill if visible."""
         own_anthill_str = f'anthill_{self.player_id}'
-        for vision_pos, entity in obs.vision.items():
-            if vision_pos.x == new_pos.x and vision_pos.y == new_pos.y:
-                if entity == own_anthill_str:
-                    return False
-
-        # Check planned positions (avoid friendly collisions)
-        for other_ant_id, other_pos in self.planned_positions.items():
-            if other_pos.x == new_pos.x and other_pos.y == new_pos.y:
-                return False
-
-        return True
-
-    def _resolve_collisions(
-        self,
-        observations: List[AntObservation],
-        actions: Dict[int, int]
-    ) -> Dict[int, int]:
-        """Resolve friendly collision conflicts."""
-        position_counts = defaultdict(list)
-
-        for obs in observations:
-            if obs.ant_id not in actions:
-                continue
-            action = actions[obs.ant_id]
-            new_pos = Action.get_new_position(obs.position, action)
-            position_counts[new_pos].append(obs.ant_id)
-
-        # For collisions, keep first ant's move
-        for pos, ant_ids in position_counts.items():
-            if len(ant_ids) > 1:
-                for ant_id in ant_ids[1:]:
-                    actions[ant_id] = Action.STAY
-
-        return actions
-
-    # Helper methods for information gathering
-
-    def _find_own_anthill(self, observations: List[AntObservation]) -> Optional[Position]:
-        """Find own anthill position."""
-        own_anthill_str = f'anthill_{self.player_id}'
-        for obs in observations:
-            for pos, entity in obs.vision.items():
-                if entity == own_anthill_str:
-                    return pos
+        for pos, entity in obs.vision.items():
+            if entity == own_anthill_str:
+                return pos
         return None
 
-    def _find_enemy_anthill(self, observations: List[AntObservation]) -> Optional[Position]:
+    def _find_enemy_anthill(self, obs: AntObservation) -> Optional[Position]:
         """Find enemy anthill if visible."""
         enemy_anthill_str = f'anthill_{1 - self.player_id}'
-        for obs in observations:
-            for pos, entity in obs.vision.items():
-                if entity == enemy_anthill_str:
-                    return pos
+        for pos, entity in obs.vision.items():
+            if entity == enemy_anthill_str:
+                return pos
         return None
 
-    def _find_nearest_food(self, obs: AntObservation) -> Optional[Position]:
-        """Find nearest food position."""
-        food_positions = [
+    def _find_closest_enemy(self, obs: AntObservation) -> Optional[Position]:
+        """Find closest enemy ant."""
+        enemy_ant_str = f'ant_{1 - self.player_id}'
+        enemy_positions = [
             pos for pos, entity in obs.vision.items()
-            if entity == 'food'
+            if entity == enemy_ant_str
         ]
 
-        if not food_positions:
+        if not enemy_positions:
             return None
 
         return min(
-            food_positions,
-            key=lambda p: obs.position.chebyshev_distance(p)
+            enemy_positions,
+            key=lambda p: self._distance_to(obs.position, p)
         )
 
     def _get_all_food_positions(self, obs: AntObservation) -> List[Position]:
@@ -539,34 +243,148 @@ class TacticalAgent(BaseAgent):
             if entity == 'food'
         ]
 
-    def _get_enemy_positions(self, obs: AntObservation) -> List[Position]:
-        """Get all visible enemy ant positions."""
-        enemy_ant_str = f'ant_{1 - self.player_id}'
-        return [
-            pos for pos, entity in obs.vision.items()
-            if entity == enemy_ant_str
-        ]
-
     def _count_nearby_enemies(self, obs: AntObservation) -> int:
         """Count visible enemy ants."""
         enemy_ant_str = f'ant_{1 - self.player_id}'
         return sum(1 for entity in obs.vision.values() if entity == enemy_ant_str)
 
+    def _count_nearby_allies(self, obs: AntObservation) -> int:
+        """Count visible allied ants (excluding self)."""
+        ally_ant_str = f'ant_{self.player_id}'
+        # Subtract 1 because vision includes self
+        return sum(1 for entity in obs.vision.values() if entity == ally_ant_str) - 1
+
     def _nearest_enemy_distance_to(self, obs: AntObservation, target: Position) -> Optional[int]:
-        """Find nearest enemy's distance to target position."""
-        enemy_positions = self._get_enemy_positions(obs)
+        """Find nearest enemy's distance to a target position."""
+        enemy_ant_str = f'ant_{1 - self.player_id}'
+        enemy_positions = [
+            pos for pos, entity in obs.vision.items()
+            if entity == enemy_ant_str
+        ]
 
         if not enemy_positions:
             return None
 
         return min(
-            enemy_pos.chebyshev_distance(target)
+            self._distance_to(enemy_pos, target)
             for enemy_pos in enemy_positions
         )
 
+    def _distance_to(self, pos1: Position, pos2: Position) -> int:
+        """Calculate Chebyshev distance (king move distance)."""
+        return max(abs(pos1.x - pos2.x), abs(pos1.y - pos2.y))
+
+    def _move_toward(
+        self,
+        obs: AntObservation,
+        target: Position,
+        game_state: GameState
+    ) -> int:
+        """Move toward target position."""
+        dx = target.x - obs.position.x
+        dy = target.y - obs.position.y
+
+        # Normalize to unit direction
+        if dx > 0:
+            dx = 1
+        elif dx < 0:
+            dx = -1
+
+        if dy > 0:
+            dy = 1
+        elif dy < 0:
+            dy = -1
+
+        # Find matching action
+        desired_action = Action.STAY
+        for action_id, (adx, ady) in Action.DIRECTIONS.items():
+            if adx == dx and ady == dy:
+                desired_action = action_id
+                break
+
+        # Check if action is valid
+        valid_actions = self.get_valid_actions(obs, game_state)
+        if desired_action in valid_actions:
+            return desired_action
+
+        # If desired action not valid, try alternates
+        # Try moving in just x direction
+        if dx != 0:
+            for action_id, (adx, ady) in Action.DIRECTIONS.items():
+                if adx == dx and ady == 0 and action_id in valid_actions:
+                    return action_id
+
+        # Try moving in just y direction
+        if dy != 0:
+            for action_id, (adx, ady) in Action.DIRECTIONS.items():
+                if adx == 0 and ady == dy and action_id in valid_actions:
+                    return action_id
+
+        # Fall back to any valid move
+        move_actions = [a for a in valid_actions if a != Action.STAY]
+        if move_actions:
+            return random.choice(move_actions)
+
+        return Action.STAY
+
+    def _retreat_from_enemies(self, obs: AntObservation, game_state: GameState) -> int:
+        """Move away from enemy ants."""
+        enemy_ant_str = f'ant_{1 - self.player_id}'
+        enemy_positions = [
+            pos for pos, entity in obs.vision.items()
+            if entity == enemy_ant_str
+        ]
+
+        if not enemy_positions:
+            return Action.STAY
+
+        # Calculate average enemy position
+        avg_x = sum(p.x for p in enemy_positions) / len(enemy_positions)
+        avg_y = sum(p.y for p in enemy_positions) / len(enemy_positions)
+
+        # Move in opposite direction
+        dx = obs.position.x - avg_x
+        dy = obs.position.y - avg_y
+
+        # Normalize
+        if dx > 0:
+            dx = 1
+        elif dx < 0:
+            dx = -1
+
+        if dy > 0:
+            dy = 1
+        elif dy < 0:
+            dy = -1
+
+        # Find matching action
+        for action_id, (adx, ady) in Action.DIRECTIONS.items():
+            if adx == dx and ady == dy:
+                valid_actions = self.get_valid_actions(obs, game_state)
+                if action_id in valid_actions:
+                    return action_id
+
+        # If can't retreat in ideal direction, try perpendicular
+        valid_actions = self.get_valid_actions(obs, game_state)
+        move_actions = [a for a in valid_actions if a != Action.STAY]
+
+        if move_actions:
+            return random.choice(move_actions)
+
+        return Action.STAY
+
+    def _is_action_safe(self, obs: AntObservation, action: int) -> bool:
+        """Check if action doesn't step on own anthill."""
+        own_anthill_str = f'anthill_{self.player_id}'
+        new_pos = Action.get_new_position(obs.position, action)
+
+        for vision_pos, entity in obs.vision.items():
+            if vision_pos.x == new_pos.x and vision_pos.y == new_pos.y:
+                if entity == own_anthill_str:
+                    return False
+
+        return True
+
     def reset(self):
-        """Reset agent state."""
-        self.planned_positions.clear()
-        self.food_claims.clear()
-        self.turn_count = 0
-        self.game_phase = "early"
+        """Reset agent state for new episode."""
+        pass
