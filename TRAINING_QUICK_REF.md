@@ -2,11 +2,23 @@
 
 ## Most Common Commands
 
-### Recommended: Full Standard Training
+### Recommended: Hybrid Training (NEW!)
+```bash
+python training/train_curriculum.py --mode hybrid --episodes 20000
+```
+Time: ~20-40 minutes | Mixes scenarios + opponents | Expected: 35-55% win rate
+
+### Standard Training (Opponent-Only)
 ```bash
 python training/train_curriculum.py --mode standard --episodes 20000
 ```
-Time: ~20-40 minutes | Expected: 30-50% win rate vs SmartRandom
+Time: ~20-40 minutes | Traditional approach | Expected: 30-50% win rate
+
+### Scenario-Based Training (NEW!)
+```bash
+python training/train_curriculum.py --mode scenario --episodes 10000
+```
+Time: ~10-20 minutes | Learn fundamentals first | Best for beginners
 
 ### Quick Test
 ```bash
@@ -26,8 +38,10 @@ Time: ~1-2 hours | Expected: 40-60% win rate vs SmartRandom
 |---------|----------|------|-----|
 | `--mode rapid` | 2K | ~2-5 min | Quick test |
 | `--mode basic` | 5K | ~5-10 min | Basic training |
-| `--mode standard` ⭐ | 20K | ~20-40 min | **RECOMMENDED** |
+| `--mode standard` | 20K | ~20-40 min | Opponent-only (traditional) |
 | `--mode intensive` | 50K | ~1-2 hours | Competition |
+| `--mode scenario` 🆕 | 10K | ~10-20 min | Isolated skills first |
+| `--mode hybrid` ⭐ | 20K | ~20-40 min | **RECOMMENDED** (scenarios + opponents) |
 | `--mode aggressive` | 15K | ~15-30 min | Aggressive style |
 | `--mode defensive` | 15K | ~15-30 min | Defensive style |
 | `--mode adaptive` | 15K | ~15-30 min | Adaptive style |
@@ -83,12 +97,41 @@ python training/train_curriculum.py --mode standard --eval-games 50
 - vs SmartRandom: 40-60% win rate ← KEY BENCHMARK
 - vs Greedy: 45-60% win rate
 
+## New: Scenario Training 🆕
+
+**What?** Train in isolated environments focusing on specific skills.
+
+**Why?** Like the user said: "models may need to train in special scenarios - like a single ant on a board with just food, or a single ant on a board with only enemy ant hills"
+
+**Available Scenarios:**
+- Food collection (no enemies)
+- Anthill attacks (no defenders)
+- Combat training (1v1, 1v2, 1v3)
+- Survival (outnumbered)
+- Multi-ant efficiency
+- Defense scenarios
+- Special challenges (maze, races)
+
+**How to use:**
+```bash
+# Scenario-only training
+python training/train_curriculum.py --mode scenario
+
+# Hybrid (scenarios + opponents) - RECOMMENDED
+python training/train_curriculum.py --mode hybrid
+```
+
+See: `SCENARIO_TRAINING_GUIDE.md` for details
+
 ## Tips
 
-1. **Start with standard**: Best balance of time/performance
+1. **Start with hybrid**: Best approach for new agents (scenarios + opponents)
 2. **Use full episodes**: Don't reduce below recommended
 3. **Monitor phase evals**: Check progress between phases
-4. **Save checkpoints**: Resume interrupted training with `--load`
-5. **Custom for goals**: Use custom curriculum for specific objectives
+4. **Try scenarios**: If agent struggles with basics, use scenario training
+5. **Save checkpoints**: Resume interrupted training with `--load`
+6. **Custom for goals**: Use custom curriculum for specific objectives
 
-For full documentation, see: `CURRICULUM_GUIDE.md`
+For full documentation, see:
+- `CURRICULUM_GUIDE.md` - Complete curriculum system guide
+- `SCENARIO_TRAINING_GUIDE.md` - Scenario-based training guide
