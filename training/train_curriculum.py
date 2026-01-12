@@ -38,6 +38,7 @@ import numpy as np
 from src.utils.game_config import GameConfig
 from src.utils.agent_helpers import get_agent_actions
 from src.environments.standard import StandardEnvironment
+from src.environments.scenario import ScenarioEnvironment
 from src.agents.random.agent import RandomAgent, SmartRandomAgent
 from src.agents.greedy.agent import GreedyAgent, AggressiveGreedyAgent, DefensiveGreedyAgent
 from src.agents.adaptive_q_learning.agent import AdaptiveQLearningAgent
@@ -49,6 +50,7 @@ from training.curriculum_config import (
     get_curriculum,
     parse_custom_curriculum
 )
+from training.training_scenarios import get_scenario
 
 
 def create_opponent(opponent_type: str, player_id: int = 1):
@@ -169,7 +171,7 @@ def train_phase(
     Args:
         phase: Phase configuration
         agent: Agent to train
-        env: Environment
+        env: Environment (can be Standard or Scenario)
         phase_number: Current phase index (1-indexed)
         total_phases: Total number of phases
         stats: Global stats dictionary to update
@@ -181,7 +183,11 @@ def train_phase(
     print(f"PHASE {phase_number}/{total_phases}: {phase.name.upper()}")
     print(f"{'='*80}")
     print(f"Episodes: {phase.episodes}")
-    print(f"Opponents: {', '.join(phase.opponents)}")
+    print(f"Training type: {phase.training_type}")
+    if phase.training_type == "opponent" and phase.opponents:
+        print(f"Opponents: {', '.join(phase.opponents)}")
+    elif phase.training_type == "scenario" and phase.scenarios:
+        print(f"Scenarios: {', '.join(phase.scenarios)}")
     if phase.description:
         print(f"Goal: {phase.description}")
     print()
@@ -205,45 +211,91 @@ def train_phase(
         # Start episode
         agent.start_episode()
 
-        # Select opponent
-        opponent_type = np.random.choice(phase.opponents)
-        opponent = create_opponent(opponent_type)
+        # Setup episode based on training type
+        if phase.training_type == "scenario":
+            # Scenario-based training
+            scenario_name = np.random.choice(phase.scenarios)
+            scenario_config = get_scenario(scenario_name)
+            scenario_env = ScenarioEnvironment(scenario_config)
 
-        # Reset
-        observations = env.reset()
-        agent.reset()
-        opponent.reset()
+            observations = scenario_env.reset()
+            agent.reset()
 
-        done = False
-        episode_reward = 0
-        episode_steps = 0
+            # Create simple opponent for scenarios that have opponent ants
+            opponent = None
+            if scenario_config.opponent_ants > 0:
+                opponent = RandomAgent(player_id=1)
+                opponent.reset()
 
-        # Run episode
-        while not done:
-            state = env.game.get_state()
+            done = False
+            episode_reward = 0
+            episode_steps = 0
 
-            agent_actions = get_agent_actions(agent, observations[0], state)
-            opponent_actions = get_agent_actions(opponent, observations[1], state)
+            # Run scenario episode
+            while not done:
+                state = scenario_env.get_state()
 
-            actions = {0: agent_actions, 1: opponent_actions}
-            result = env.step(actions)
+                agent_actions = get_agent_actions(agent, observations[0], state)
+                opponent_actions = {}
+                if opponent and len(observations[1]) > 0:
+                    opponent_actions = get_agent_actions(opponent, observations[1], state)
 
-            # Update Q-values
-            ant_rewards = {ant_id: result.rewards[0] for ant_id in agent_actions.keys()}
-            agent.update_q_values(ant_rewards, result.observations[0], result.done)
+                actions = {0: agent_actions, 1: opponent_actions}
+                result = scenario_env.step(actions)
 
-            episode_reward += result.rewards[0]
-            episode_steps += 1
+                # Update Q-values
+                ant_rewards = {ant_id: result.rewards[0] for ant_id in agent_actions.keys()}
+                agent.update_q_values(ant_rewards, result.observations[0], result.done)
 
-            # Render if requested
-            if render and episode_in_phase % 100 == 0 and episode_steps % 10 == 0:
-                print("\033[2J\033[H")
-                print(viz.render(env.game, clear_screen=False))
-                print(f"Phase: {phase.name} | Episode: {episode_in_phase}/{phase.episodes}")
-                time.sleep(0.05)
+                episode_reward += result.rewards[0]
+                episode_steps += 1
 
-            observations = result.observations
-            done = result.done
+                observations = result.observations
+                done = result.done
+
+            opponent_name = scenario_name
+
+        else:
+            # Opponent-based training
+            opponent_type = np.random.choice(phase.opponents)
+            opponent = create_opponent(opponent_type)
+
+            observations = env.reset()
+            agent.reset()
+            opponent.reset()
+
+            done = False
+            episode_reward = 0
+            episode_steps = 0
+
+            # Run opponent episode
+            while not done:
+                state = env.game.get_state()
+
+                agent_actions = get_agent_actions(agent, observations[0], state)
+                opponent_actions = get_agent_actions(opponent, observations[1], state)
+
+                actions = {0: agent_actions, 1: opponent_actions}
+                result = env.step(actions)
+
+                # Update Q-values
+                ant_rewards = {ant_id: result.rewards[0] for ant_id in agent_actions.keys()}
+                agent.update_q_values(ant_rewards, result.observations[0], result.done)
+
+                episode_reward += result.rewards[0]
+                episode_steps += 1
+
+                # Render if requested
+                if render and episode_in_phase % 100 == 0 and episode_steps % 10 == 0:
+                    print("\033[2J\033[H")
+                    print(viz.render(env.game, clear_screen=False))
+                    print(f"Phase: {phase.name} | Episode: {episode_in_phase}/{phase.episodes}")
+                    time.sleep(0.05)
+
+                observations = result.observations
+                done = result.done
+
+            opponent_name = opponent_type
 
         # Record stats
         stats['episodes'].append(phase_start_episode + episode_in_phase)
@@ -257,7 +309,7 @@ def train_phase(
         stats['learning_rates'].append(agent.learning_rate)
         stats['epsilons'].append(agent.epsilon)
         stats['q_table_sizes'].append(len(agent.q_table))
-        stats['opponent_types'].append(opponent_type)
+        stats['opponent_types'].append(opponent_name)
         episodes_in_phase += 1
 
         # Periodic evaluation within phase
@@ -457,6 +509,8 @@ Training Modes (--mode):
   basic      : Quick 5K episodes for basic training (~5-10 min)
   standard   : Balanced 20K episodes - RECOMMENDED (~20-40 min)
   intensive  : Deep 50K episodes for competition (~1-2 hours)
+  scenario   : 10K episodes with isolated skill scenarios - NEW! (~10-20 min)
+  hybrid     : 20K episodes mixing scenarios + opponents - NEW! (~20-40 min)
   aggressive : 15K episodes focused on aggressive play
   defensive  : 15K episodes focused on defensive play
   adaptive   : 15K episodes focused on adaptability
@@ -464,6 +518,12 @@ Training Modes (--mode):
 Examples:
   # Standard full training (recommended)
   python training/train_curriculum.py --mode standard --episodes 20000
+
+  # Scenario-based training (isolated skills first)
+  python training/train_curriculum.py --mode scenario --episodes 10000
+
+  # Hybrid training (best of both worlds)
+  python training/train_curriculum.py --mode hybrid --episodes 20000
 
   # Quick test
   python training/train_curriculum.py --mode rapid
@@ -483,7 +543,7 @@ Examples:
         "--mode",
         type=str,
         default="standard",
-        choices=['rapid', 'basic', 'standard', 'intensive', 'aggressive', 'defensive', 'adaptive'],
+        choices=['rapid', 'basic', 'standard', 'intensive', 'scenario', 'hybrid', 'aggressive', 'defensive', 'adaptive'],
         help="Training mode (default: standard)"
     )
     parser.add_argument(
@@ -542,12 +602,13 @@ Examples:
     # List modes
     if args.list_modes:
         print("\nAvailable Training Modes:\n")
-        for mode_name in ['rapid', 'basic', 'standard', 'intensive', 'aggressive', 'defensive', 'adaptive']:
+        for mode_name in ['rapid', 'basic', 'standard', 'intensive', 'scenario', 'hybrid', 'aggressive', 'defensive', 'adaptive']:
             curriculum = get_curriculum(mode_name)
             print(f"{mode_name:12s} ({curriculum.total_episodes():5d} episodes): {curriculum.description}")
             for phase in curriculum.phases:
                 pct = phase.episodes / curriculum.total_episodes() * 100
-                print(f"  - {phase.name:18s}: {phase.episodes:5d} eps ({pct:4.1f}%) | {', '.join(phase.opponents)}")
+                content = ', '.join(phase.opponents) if phase.opponents else ', '.join(phase.scenarios) if phase.scenarios else 'custom'
+                print(f"  - {phase.name:18s}: {phase.episodes:5d} eps ({pct:4.1f}%) | {content}")
             print()
         return
 

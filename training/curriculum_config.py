@@ -27,8 +27,14 @@ class CurriculumPhase:
     episodes: int
     """Number of episodes in this phase"""
 
-    opponents: List[str]
+    opponents: Optional[List[str]] = None
     """List of opponent types to train against (randomly selected each episode)"""
+
+    scenarios: Optional[List[str]] = None
+    """List of scenario names to train in (randomly selected each episode)"""
+
+    training_type: str = "opponent"
+    """Type of training: 'opponent' (vs agents) or 'scenario' (isolated scenarios)"""
 
     learning_rate: Optional[float] = None
     """Learning rate for this phase (None = use agent's current LR)"""
@@ -400,13 +406,156 @@ def get_specialized_curriculum(
         )
 
 
+def get_scenario_curriculum(total_episodes: int = 10000) -> TrainingCurriculum:
+    """
+    Scenario-based curriculum focusing on isolated skill development.
+
+    This curriculum trains agents in simplified scenarios before full games:
+    - Food collection (no enemies)
+    - Combat basics (isolated combat)
+    - Anthill attacks (no defenders)
+    - Then progresses to full opponent training
+
+    Focus: Master fundamentals in isolation before complex situations
+    Time: ~10-20 minutes for 10000 episodes
+    Use: Agents that need strong fundamental skills
+    """
+    return TrainingCurriculum(
+        name="scenario_based",
+        description="Scenario-based training with isolated skill development",
+        phases=[
+            CurriculumPhase(
+                name="food_mastery",
+                episodes=int(total_episodes * 0.2),
+                scenarios=['food_easy', 'food_medium', 'food_hard'],
+                training_type="scenario",
+                epsilon=1.0,
+                epsilon_decay=0.9995,
+                eval_freq=200,
+                description="Master food collection in isolation"
+            ),
+            CurriculumPhase(
+                name="combat_basics",
+                episodes=int(total_episodes * 0.15),
+                scenarios=['combat_1v1', 'combat_1v2'],
+                training_type="scenario",
+                epsilon_decay=0.9995,
+                description="Learn basic combat and survival"
+            ),
+            CurriculumPhase(
+                name="anthill_tactics",
+                episodes=int(total_episodes * 0.15),
+                scenarios=['anthill_close', 'anthill_medium', 'anthill_far'],
+                training_type="scenario",
+                epsilon_decay=0.9994,
+                description="Learn to find and attack enemy anthills"
+            ),
+            CurriculumPhase(
+                name="multi_ant_coordination",
+                episodes=int(total_episodes * 0.15),
+                scenarios=['efficient_2ants', 'efficient_3ants', 'contested_2v2'],
+                training_type="scenario",
+                epsilon_decay=0.9994,
+                description="Learn independent multi-ant efficiency"
+            ),
+            CurriculumPhase(
+                name="transition_to_full_game",
+                episodes=int(total_episodes * 0.2),
+                opponents=['random', 'smart_random'],
+                training_type="opponent",
+                epsilon_decay=0.9993,
+                description="Apply learned skills in full games"
+            ),
+            CurriculumPhase(
+                name="advanced_opponents",
+                episodes=int(total_episodes * 0.15),
+                opponents=['greedy', 'greedy_aggressive', 'greedy_defensive'],
+                training_type="opponent",
+                epsilon_decay=0.999,
+                description="Challenge against heuristic opponents"
+            ),
+        ],
+        initial_learning_rate=0.3,
+        final_learning_rate=0.001,
+        learning_rate_decay_type="polynomial",
+        initial_epsilon=1.0,
+        final_epsilon=0.05
+    )
+
+
+def get_hybrid_curriculum(total_episodes: int = 20000) -> TrainingCurriculum:
+    """
+    Hybrid curriculum mixing scenarios and opponent training throughout.
+
+    Alternates between isolated skill training and full game experience
+    for balanced development.
+
+    Focus: Continuous skill development with real-world application
+    Time: ~20-40 minutes for 20000 episodes
+    Use: Best of both worlds - scenarios + opponents
+    """
+    return TrainingCurriculum(
+        name="hybrid",
+        description="Hybrid training mixing scenarios and full opponent games",
+        phases=[
+            CurriculumPhase(
+                name="fundamentals_scenarios",
+                episodes=int(total_episodes * 0.15),
+                scenarios=['food_easy', 'food_medium', 'combat_1v1'],
+                training_type="scenario",
+                epsilon=1.0,
+                description="Learn basics in isolation"
+            ),
+            CurriculumPhase(
+                name="fundamentals_opponents",
+                episodes=int(total_episodes * 0.15),
+                opponents=['random', 'smart_random'],
+                training_type="opponent",
+                description="Apply basics in full games"
+            ),
+            CurriculumPhase(
+                name="intermediate_scenarios",
+                episodes=int(total_episodes * 0.15),
+                scenarios=['anthill_medium', 'combat_1v2', 'contested_2v2'],
+                training_type="scenario",
+                description="Learn intermediate tactics"
+            ),
+            CurriculumPhase(
+                name="intermediate_opponents",
+                episodes=int(total_episodes * 0.20),
+                opponents=['smart_random', 'greedy'],
+                training_type="opponent",
+                description="Apply tactics in full games"
+            ),
+            CurriculumPhase(
+                name="advanced_scenarios",
+                episodes=int(total_episodes * 0.10),
+                scenarios=['survival_1v3', 'defense_3attackers', 'maze'],
+                training_type="scenario",
+                description="Master difficult challenges"
+            ),
+            CurriculumPhase(
+                name="advanced_opponents",
+                episodes=int(total_episodes * 0.25),
+                opponents=['greedy', 'greedy_aggressive', 'greedy_defensive', 'smart_random'],
+                training_type="opponent",
+                description="Face diverse opponent strategies"
+            ),
+        ],
+        initial_learning_rate=0.3,
+        final_learning_rate=0.001,
+        initial_epsilon=1.0,
+        final_epsilon=0.05
+    )
+
+
 def get_curriculum(name: str, total_episodes: Optional[int] = None) -> TrainingCurriculum:
     """
     Get a curriculum by name.
 
     Args:
         name: Curriculum name ('basic', 'standard', 'intensive', 'rapid',
-              'aggressive', 'defensive', 'adaptive')
+              'aggressive', 'defensive', 'adaptive', 'scenario', 'hybrid')
         total_episodes: Override total episodes (None = use default)
 
     Returns:
@@ -420,6 +569,8 @@ def get_curriculum(name: str, total_episodes: Optional[int] = None) -> TrainingC
         'basic': get_basic_curriculum,
         'standard': get_standard_curriculum,
         'intensive': get_intensive_curriculum,
+        'scenario': get_scenario_curriculum,
+        'hybrid': get_hybrid_curriculum,
     }
 
     specialized_map = {
@@ -443,7 +594,7 @@ def get_curriculum(name: str, total_episodes: Optional[int] = None) -> TrainingC
     else:
         raise ValueError(
             f"Unknown curriculum: {name}\n"
-            f"Available: {', '.join(list(curricula_map.keys()) + list(specialized_map.keys()))}"
+            f"Available: {', '.join(sorted(list(curricula_map.keys()) + list(specialized_map.keys())))}"
         )
 
 
