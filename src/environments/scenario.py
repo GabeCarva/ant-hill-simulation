@@ -90,8 +90,8 @@ class ScenarioEnvironment:
                     self.game.board.add_food(Position(x, y))
 
         self.last_food_counts = {
-            0: self.game.board.anthills[0].food_stored,
-            1: self.game.board.anthills[1].food_stored
+            0: self.game.food_collected[0],
+            1: self.game.food_collected[1]
         }
 
         # Get initial observations
@@ -148,8 +148,8 @@ class ScenarioEnvironment:
         # Track state before actions
         ants_before = {pid: len([a for a in self.game.board.ants.values() if a.player_id == pid])
                       for pid in [0, 1]}
-        food_before = {pid: self.game.board.anthills[pid].food_stored for pid in [0, 1]}
-        anthill_health_before = {pid: self.game.board.anthills[pid].health for pid in [0, 1]}
+        food_before = {pid: self.game.food_collected[pid] for pid in [0, 1]}
+        anthill_alive_before = {pid: self.game.board.anthills[pid].alive for pid in [0, 1]}
 
         # Execute actions
         self.game.execute_turn(actions)
@@ -158,8 +158,8 @@ class ScenarioEnvironment:
         # Track state after actions
         ants_after = {pid: len([a for a in self.game.board.ants.values() if a.player_id == pid])
                      for pid in [0, 1]}
-        food_after = {pid: self.game.board.anthills[pid].food_stored for pid in [0, 1]}
-        anthill_health_after = {pid: self.game.board.anthills[pid].health for pid in [0, 1]}
+        food_after = {pid: self.game.food_collected[pid] for pid in [0, 1]}
+        anthill_alive_after = {pid: self.game.board.anthills[pid].alive for pid in [0, 1]}
 
         # Calculate scenario-specific rewards
         rewards = {0: 0.0, 1: 0.0}
@@ -175,15 +175,15 @@ class ScenarioEnvironment:
             if enemies_killed > 0:
                 rewards[pid] += enemies_killed * self.scenario.reward_enemy_killed
 
-            # Anthill damage rewards
-            anthill_damage = anthill_health_before[1 - pid] - anthill_health_after[1 - pid]
-            if anthill_damage > 0:
-                rewards[pid] += anthill_damage * self.scenario.reward_anthill_damaged
+            # Anthill destruction rewards (alive -> dead)
+            if anthill_alive_before[1 - pid] and not anthill_alive_after[1 - pid]:
+                # Enemy anthill was destroyed
+                rewards[pid] += self.scenario.reward_anthill_damaged
 
-            # Own anthill damage penalty
-            own_damage = anthill_health_before[pid] - anthill_health_after[pid]
-            if own_damage > 0:
-                rewards[pid] -= own_damage * abs(self.scenario.reward_anthill_damaged)
+            # Own anthill destruction penalty
+            if anthill_alive_before[pid] and not anthill_alive_after[pid]:
+                # Own anthill was destroyed
+                rewards[pid] -= abs(self.scenario.reward_anthill_damaged)
 
             # Death penalty
             ants_died = ants_before[pid] - ants_after[pid]
@@ -226,10 +226,10 @@ class ScenarioEnvironment:
         winner = -1
 
         # Standard win conditions
-        if self.game.board.anthills[0].health <= 0:
+        if not self.game.board.anthills[0].alive:
             done = True
             winner = 1
-        elif self.game.board.anthills[1].health <= 0:
+        elif not self.game.board.anthills[1].alive:
             done = True
             winner = 0
         elif self.turn_count >= self.scenario.max_turns:
@@ -263,7 +263,7 @@ class ScenarioEnvironment:
             'turn': self.turn_count,
             'food_collected': {0: food_after[0], 1: food_after[1]},
             'ants_alive': {0: ants_after[0], 1: ants_after[1]},
-            'anthill_health': {0: anthill_health_after[0], 1: anthill_health_after[1]},
+            'anthill_alive': {0: anthill_alive_after[0], 1: anthill_alive_after[1]},
             'scenario': self.scenario.name
         }
 
