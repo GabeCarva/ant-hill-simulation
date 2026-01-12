@@ -87,16 +87,16 @@ class ScenarioEnvironment:
         if self.scenario.food_positions:
             for x, y in self.scenario.food_positions:
                 if 0 <= x < self.config.board_width and 0 <= y < self.config.board_height:
-                    self.game.board[x][y] = 'food'
+                    self.game.board.add_food(Position(x, y))
 
         self.last_food_counts = {
-            0: self.game.anthills[0].food_stored,
-            1: self.game.anthills[1].food_stored
+            0: self.game.board.anthills[0].food_stored,
+            1: self.game.board.anthills[1].food_stored
         }
 
         # Get initial observations
         observations = [[], []]
-        for ant_id, ant in self.game.ants.items():
+        for ant_id, ant in self.game.board.ants.items():
             obs = self.game.get_ant_observation(ant_id)
             observations[ant.player_id].append(obs)
 
@@ -106,27 +106,31 @@ class ScenarioEnvironment:
         """Setup scenario based on config."""
         # Adjust ant counts
         current_ants = {0: [], 1: []}
-        for ant_id, ant in list(self.game.ants.items()):
+        for ant_id, ant in list(self.game.board.ants.items()):
             current_ants[ant.player_id].append(ant_id)
 
         # Remove excess ants for player 0
         while len(current_ants[0]) > self.scenario.player_ants:
             ant_id = current_ants[0].pop()
-            del self.game.ants[ant_id]
+            ant = self.game.board.ants[ant_id]
+            self.game.board._position_map.pop(ant.position, None)
+            del self.game.board.ants[ant_id]
 
         # Remove excess ants for player 1
         while len(current_ants[1]) > self.scenario.opponent_ants:
             ant_id = current_ants[1].pop()
-            del self.game.ants[ant_id]
+            ant = self.game.board.ants[ant_id]
+            self.game.board._position_map.pop(ant.position, None)
+            del self.game.board.ants[ant_id]
 
         # Position anthills if specified
         if self.scenario.player_anthill_pos:
             x, y = self.scenario.player_anthill_pos
-            self.game.anthills[0].position = Position(x, y)
+            self.game.board.anthills[0].position = Position(x, y)
 
         if self.scenario.opponent_anthill_pos:
             x, y = self.scenario.opponent_anthill_pos
-            self.game.anthills[1].position = Position(x, y)
+            self.game.board.anthills[1].position = Position(x, y)
 
     def step(self, actions: Dict[int, Dict[int, int]]) -> ScenarioStepResult:
         """
@@ -142,20 +146,20 @@ class ScenarioEnvironment:
             raise RuntimeError("Environment not reset. Call reset() first.")
 
         # Track state before actions
-        ants_before = {pid: len([a for a in self.game.ants.values() if a.player_id == pid])
+        ants_before = {pid: len([a for a in self.game.board.ants.values() if a.player_id == pid])
                       for pid in [0, 1]}
-        food_before = {pid: self.game.anthills[pid].food_stored for pid in [0, 1]}
-        anthill_health_before = {pid: self.game.anthills[pid].health for pid in [0, 1]}
+        food_before = {pid: self.game.board.anthills[pid].food_stored for pid in [0, 1]}
+        anthill_health_before = {pid: self.game.board.anthills[pid].health for pid in [0, 1]}
 
         # Execute actions
         self.game.execute_turn(actions)
         self.turn_count += 1
 
         # Track state after actions
-        ants_after = {pid: len([a for a in self.game.ants.values() if a.player_id == pid])
+        ants_after = {pid: len([a for a in self.game.board.ants.values() if a.player_id == pid])
                      for pid in [0, 1]}
-        food_after = {pid: self.game.anthills[pid].food_stored for pid in [0, 1]}
-        anthill_health_after = {pid: self.game.anthills[pid].health for pid in [0, 1]}
+        food_after = {pid: self.game.board.anthills[pid].food_stored for pid in [0, 1]}
+        anthill_health_after = {pid: self.game.board.anthills[pid].health for pid in [0, 1]}
 
         # Calculate scenario-specific rewards
         rewards = {0: 0.0, 1: 0.0}
@@ -191,23 +195,23 @@ class ScenarioEnvironment:
                 rewards[pid] += ants_after[pid] * self.scenario.reward_survival
 
         # Distance-based reward shaping (for player 0 only, the training agent)
-        if self.scenario.reward_distance_to_food != 0 and len(self.game.ants) > 0:
-            player_ants = [a for a in self.game.ants.values() if a.player_id == 0]
-            if player_ants and len(self.game.food) > 0:
+        if self.scenario.reward_distance_to_food != 0 and len(self.game.board.ants) > 0:
+            player_ants = [a for a in self.game.board.ants.values() if a.player_id == 0]
+            if player_ants and len(self.game.board.food) > 0:
                 # Find average distance to nearest food
                 total_dist = 0
                 for ant in player_ants:
                     min_dist = min(
-                        abs(ant.position.x - food.x) + abs(ant.position.y - food.y)
-                        for food in self.game.food.values()
+                        abs(ant.position.x - food.position.x) + abs(ant.position.y - food.position.y)
+                        for food in self.game.board.food
                     )
                     total_dist += min_dist
                 avg_dist = total_dist / len(player_ants)
                 rewards[0] += avg_dist * self.scenario.reward_distance_to_food
 
         if self.scenario.reward_distance_to_anthill != 0 and self.scenario.opponent_ants > 0:
-            player_ants = [a for a in self.game.ants.values() if a.player_id == 0]
-            enemy_anthill = self.game.anthills[1]
+            player_ants = [a for a in self.game.board.ants.values() if a.player_id == 0]
+            enemy_anthill = self.game.board.anthills[1]
             if player_ants:
                 total_dist = 0
                 for ant in player_ants:
@@ -222,10 +226,10 @@ class ScenarioEnvironment:
         winner = -1
 
         # Standard win conditions
-        if self.game.anthills[0].health <= 0:
+        if self.game.board.anthills[0].health <= 0:
             done = True
             winner = 1
-        elif self.game.anthills[1].health <= 0:
+        elif self.game.board.anthills[1].health <= 0:
             done = True
             winner = 0
         elif self.turn_count >= self.scenario.max_turns:
@@ -250,7 +254,7 @@ class ScenarioEnvironment:
 
         # Get observations
         observations = [[], []]
-        for ant_id, ant in self.game.ants.items():
+        for ant_id, ant in self.game.board.ants.items():
             obs = self.game.get_ant_observation(ant_id)
             observations[ant.player_id].append(obs)
 
