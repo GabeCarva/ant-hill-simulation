@@ -330,19 +330,19 @@ def get_maze_scenario() -> TrainingScenario:
         # Vertical walls
         for y in range(3, board_h - 3):
             if y != board_h // 2:  # Leave gaps
-                game.board[board_w // 3][y] = 'rock'
-                game.board[2 * board_w // 3][y] = 'rock'
+                game.board.add_rock(Position(board_w // 3, y))
+                game.board.add_rock(Position(2 * board_w // 3, y))
 
         # Horizontal walls
         for x in range(3, board_w - 3):
             if x != board_w // 2:
-                game.board[x][board_h // 3] = 'rock'
-                game.board[x][2 * board_h // 3] = 'rock'
+                game.board.add_rock(Position(x, board_h // 3))
+                game.board.add_rock(Position(x, 2 * board_h // 3))
 
         # Place food at the end
-        game.board[board_w - 2][board_h - 2] = 'food'
-        game.board[board_w - 3][board_h - 2] = 'food'
-        game.board[board_w - 2][board_h - 3] = 'food'
+        game.board.add_food(Position(board_w - 2, board_h - 2))
+        game.board.add_food(Position(board_w - 3, board_h - 2))
+        game.board.add_food(Position(board_w - 2, board_h - 3))
 
     return TrainingScenario(
         name="maze_navigation",
@@ -373,7 +373,7 @@ def get_food_race_scenario() -> TrainingScenario:
         game.board.anthills[1].position = Position(board_w - 3, board_h // 2)
 
         # Place single food in center
-        game.board[board_w // 2][board_h // 2] = 'food'
+        game.board.add_food(Position(board_w // 2, board_h // 2))
 
     return TrainingScenario(
         name="food_race",
