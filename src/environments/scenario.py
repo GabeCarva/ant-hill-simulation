@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from src.core.game import Game, Position
 from src.utils.game_config import GameConfig
-from src.agents.base import AntObservation
+from src.agents.base import AntObservation, BaseAgent
 
 
 @dataclass
@@ -94,10 +94,25 @@ class ScenarioEnvironment:
             1: self.game.food_collected[1]
         }
 
-        # Get initial observations
+        # Get initial observations as AntObservation objects
         observations = [[], []]
         for ant_id, ant in self.game.board.ants.items():
-            obs = self.game.get_ant_observation(ant)
+            raw_obs = self.game.get_ant_observation(ant)
+
+            # Convert to AntObservation object
+            vision_array = BaseAgent.encode_vision(
+                raw_obs['vision'],
+                ant.player_id,
+                self.game.config.ant_vision_radius
+            )
+
+            obs = AntObservation(
+                ant_id=ant.ant_id,
+                player_id=ant.player_id,
+                position=ant.position,
+                vision=raw_obs['vision'],
+                vision_array=vision_array
+            )
             observations[ant.player_id].append(obs)
 
         return observations
@@ -252,10 +267,25 @@ class ScenarioEnvironment:
         if 'survival' in self.scenario.name.lower() and done and winner == -1 and ants_after[0] > 0:
             winner = 0
 
-        # Get observations
+        # Get observations as AntObservation objects
         observations = [[], []]
         for ant_id, ant in self.game.board.ants.items():
-            obs = self.game.get_ant_observation(ant)
+            raw_obs = self.game.get_ant_observation(ant)
+
+            # Convert to AntObservation object
+            vision_array = BaseAgent.encode_vision(
+                raw_obs['vision'],
+                ant.player_id,
+                self.game.config.ant_vision_radius
+            )
+
+            obs = AntObservation(
+                ant_id=ant.ant_id,
+                player_id=ant.player_id,
+                position=ant.position,
+                vision=raw_obs['vision'],
+                vision_array=vision_array
+            )
             observations[ant.player_id].append(obs)
 
         # Build info dict
