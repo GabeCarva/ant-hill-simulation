@@ -166,8 +166,13 @@ class ScenarioEnvironment:
         food_before = {pid: self.game.food_collected[pid] for pid in [0, 1]}
         anthill_alive_before = {pid: self.game.board.anthills[pid].alive for pid in [0, 1]}
 
-        # Execute actions
-        self.game.execute_turn(actions)
+        # Queue actions for all players
+        for player_id, player_actions in actions.items():
+            for ant_id, action in player_actions.items():
+                self.game.set_ant_action(ant_id, action)
+
+        # Execute game step
+        self.game.step()
         self.turn_count += 1
 
         # Track state after actions
