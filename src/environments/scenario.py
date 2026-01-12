@@ -97,7 +97,7 @@ class ScenarioEnvironment:
         # Get initial observations
         observations = [[], []]
         for ant_id, ant in self.game.board.ants.items():
-            obs = self.game.get_ant_observation(ant_id)
+            obs = self.game.get_ant_observation(ant)
             observations[ant.player_id].append(obs)
 
         return observations
@@ -255,7 +255,7 @@ class ScenarioEnvironment:
         # Get observations
         observations = [[], []]
         for ant_id, ant in self.game.board.ants.items():
-            obs = self.game.get_ant_observation(ant_id)
+            obs = self.game.get_ant_observation(ant)
             observations[ant.player_id].append(obs)
 
         # Build info dict
