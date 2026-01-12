@@ -101,9 +101,14 @@ def evaluate_matchup(
         while not done:
             state = env.game.get_state()
 
-            # Get actions
-            actions1 = agent1.get_actions(observations[0], state)
-            actions2 = agent2.get_actions(observations[1], state)
+            # Get actions (using new independent control API)
+            actions1 = {}
+            for obs in observations[0]:
+                actions1[obs.ant_id] = agent1.get_action(obs, state)
+
+            actions2 = {}
+            for obs in observations[1]:
+                actions2[obs.ant_id] = agent2.get_action(obs, state)
 
             # Step
             actions = {0: actions1, 1: actions2}
