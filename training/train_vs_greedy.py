@@ -5,6 +5,7 @@ import sys
 import time
 import json
 import argparse
+from typing import Optional
 from datetime import datetime
 
 # Add project root to path
@@ -423,5 +424,4 @@ Examples:
 
 
 if __name__ == "__main__":
-    from typing import Optional
     main()

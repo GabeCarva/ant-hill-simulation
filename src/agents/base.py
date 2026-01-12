@@ -42,15 +42,16 @@ class AntObservation:
 class BaseAgent(ABC):
     """
     Abstract base class for all agent types.
-    
-    Each agent controls all ants for one player and must decide
-    actions for each ant based on observations.
+
+    Each agent controls ants independently - each ant makes its own
+    decision without knowledge of other ants' planned actions.
+    This prevents unfair coordination advantages.
     """
-    
+
     def __init__(self, player_id: int, config: Optional[Dict[str, Any]] = None):
         """
         Initialize agent.
-        
+
         Args:
             player_id: Which player this agent controls (0 or 1)
             config: Agent-specific configuration
@@ -58,22 +59,26 @@ class BaseAgent(ABC):
         self.player_id = player_id
         self.config = config or {}
         self.is_training = False
-        
+
     @abstractmethod
-    def get_actions(
-        self, 
-        observations: List[AntObservation], 
+    def get_action(
+        self,
+        observation: AntObservation,
         game_state: GameState
-    ) -> Dict[int, int]:
+    ) -> int:
         """
-        Get actions for all ants.
-        
+        Get action for a SINGLE ant.
+
+        Called once per ant, in random order each turn.
+        Agent CANNOT coordinate with other ants within the same turn.
+        Agent MAY maintain state (memory, Q-table) across turns.
+
         Args:
-            observations: List of observations, one per living ant
-            game_state: Current game state
-            
+            observation: Observation for ONE ant
+            game_state: Current game state (read-only, no ant coordination allowed)
+
         Returns:
-            Dictionary mapping ant_id -> action
+            Action ID for this ant
         """
         pass
     
@@ -259,13 +264,25 @@ class AgentWrapper:
     def step(self):
         """
         Execute one step: get observations, decide actions, apply them.
-        
+
+        Calls agent.get_action() for each ant individually in random order
+        to prevent coordination exploits.
+
         Note: This doesn't call game.step() - that should be done after
         both agents have submitted their actions.
         """
+        import random
+
         observations = self.get_observations()
         game_state = self.game.get_state()
-        
+
         if observations:  # Only get actions if we have living ants
-            actions = self.agent.get_actions(observations, game_state)
+            # Randomize ant order to prevent turn-order exploitation
+            random.shuffle(observations)
+
+            actions = {}
+            for obs in observations:
+                action = self.agent.get_action(obs, game_state)
+                actions[obs.ant_id] = action
+
             self.apply_actions(actions)
