@@ -14,29 +14,11 @@ sys.path.insert(0, project_root)
 
 import numpy as np
 from src.utils.game_config import GameConfig
+from src.utils.agent_helpers import get_agent_actions
 from src.environments.standard import StandardEnvironment
 from src.agents.random.agent import RandomAgent, SmartRandomAgent
 from src.agents.q_learning.agent import SimpleQLearningAgent
 from src.visualization.ascii_viz import ASCIIVisualizer
-
-
-def get_agent_actions(agent, observations, game_state):
-    """
-    Get actions from agent for all ants (handles new independent control API).
-
-    Args:
-        agent: Agent instance
-        observations: List of AntObservation objects
-        game_state: Current game state
-
-    Returns:
-        Dictionary mapping ant_id -> action
-    """
-    actions = {}
-    for obs in observations:
-        action = agent.get_action(obs, game_state)
-        actions[obs.ant_id] = action
-    return actions
 
 
 def train_q_learning(

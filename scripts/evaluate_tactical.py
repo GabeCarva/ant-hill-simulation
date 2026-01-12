@@ -12,6 +12,7 @@ sys.path.insert(0, project_root)
 
 import numpy as np
 from src.utils.game_config import GameConfig
+from src.utils.agent_helpers import get_agent_actions
 from src.environments.standard import StandardEnvironment
 from src.agents.random.agent import RandomAgent, SmartRandomAgent
 from src.agents.greedy.agent import GreedyAgent, AggressiveGreedyAgent, DefensiveGreedyAgent
@@ -102,13 +103,8 @@ def evaluate_matchup(
             state = env.game.get_state()
 
             # Get actions (using new independent control API)
-            actions1 = {}
-            for obs in observations[0]:
-                actions1[obs.ant_id] = agent1.get_action(obs, state)
-
-            actions2 = {}
-            for obs in observations[1]:
-                actions2[obs.ant_id] = agent2.get_action(obs, state)
+            actions1 = get_agent_actions(agent1, observations[0], state)
+            actions2 = get_agent_actions(agent2, observations[1], state)
 
             # Step
             actions = {0: actions1, 1: actions2}
