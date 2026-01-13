@@ -191,19 +191,17 @@ ehthumbs_vista.db
 models/*.pth
 models/*.h5
 models/*.ckpt
+models/*.pkl
 models/checkpoints/
 models/temp/
-# Keep the .pkl files for Q-learning models
-# models/*.pkl
 
 # Training logs
 logs/*.log
 logs/*.txt
+logs/*.json
 logs/tensorboard/
 logs/wandb/
 wandb/
-# Keep the .json training stats
-# logs/*.json
 
 # Temporary files
 *.tmp
