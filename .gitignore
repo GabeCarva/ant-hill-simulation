@@ -194,18 +194,15 @@ models/*.ckpt
 models/*.pkl
 models/checkpoints/
 models/temp/
-# Keep the .pkl files for Q-learning models
-# models/*.pkl
 
 # Training logs
 logs/*.log
 logs/*.txt
+logs/*.json
 logs/tensorboard/
 logs/wandb/
 logs/*.json
 wandb/
-# Keep the .json training stats
-# logs/*.json
 
 # Temporary files
 *.tmp
