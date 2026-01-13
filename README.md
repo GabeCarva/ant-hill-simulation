@@ -20,13 +20,19 @@ pip install -r requirements.txt
 python tests/test_comprehensive.py
 
 # Run a simple demo game
-python scripts/demo_simple.py
+python scripts/demo_game.py
 
-# Train a Q-learning agent (no dependencies needed!)
-python training/train_simple.py --episodes 1000
+# Train a Q-learning agent with hybrid curriculum (recommended)
+python training/train_curriculum.py --mode hybrid --episodes 10000
+
+# Or train simply without curriculum
+python training/train_simply.py --episodes 1000
+
+# Evaluate trained agent
+python scripts/evaluate_agents.py --agents models/curriculum_hybrid_final.pkl --opponents random smart_random greedy --games 100
 
 # Visualize a trained agent
-python scripts/demo_trained_agent.py demo --agent-type q_learning --model models/q_learning_final.pkl
+python scripts/demo_trained_agent.py demo --agent-path models/curriculum_hybrid_final.pkl
 ```
 
 ## Project Structure
@@ -34,40 +40,45 @@ python scripts/demo_trained_agent.py demo --agent-type q_learning --model models
 ```
 ant-hill-simulation/
 ├── src/                     # Core game implementation
-│   ├── core/               # Game mechanics
-│   │   ├── game.py        # Main game loop and state management
-│   │   ├── board.py       # Board representation and operations
-│   │   └── entities.py    # Game entities (Ant, Food, Rock, Anthill)
-│   ├── agents/            # Agent implementations
-│   │   ├── base.py        # Abstract base agent class
-│   │   ├── random/        # Random baseline agents
-│   │   ├── q_learning/    # Q-learning agent
-│   │   ├── dqn/           # Deep Q-Network (needs PyTorch)
-│   │   └── ppo/           # PPO agent (needs PyTorch)
-│   ├── environments/      # RL environments
-│   │   ├── base.py        # Base environment class
-│   │   ├── standard.py    # Standard game environment
-│   │   └── training.py    # Training environments with reward shaping
-│   ├── utils/             # Utilities
-│   │   ├── game_config.py # Game configuration
-│   │   └── game_setup.py  # Quick setup helpers
-│   └── visualization/     # Display systems
-│       └── ascii_viz.py   # ASCII visualization
-├── training/              # Training scripts
-│   ├── train_simple.py    # Q-learning training (no dependencies)
-│   └── train.py          # Full training script (needs PyTorch)
-├── scripts/              # Demo and utility scripts
-│   ├── demo_simple.py    # Basic game demo
-│   ├── demo_game.py      # Interactive visualization
-│   └── demo_trained_agent.py # Visualize trained agents
-├── tests/                # Test suite
-│   ├── test_comprehensive.py # Full test suite
-│   └── test_anthill_safety.py # Safety tests
-├── models/               # Saved trained models
-├── logs/                 # Training logs
-└── docs/                 # Additional documentation
-├── tests/                   # Test files
-├── docs/                    # Documentation
+│   ├── core/               # Game mechanics (game.py, board.py, entities.py)
+│   ├── agents/             # Agent implementations
+│   │   ├── base.py         # Abstract base agent & observation encoding
+│   │   ├── adaptive_q_learning/  # Adaptive Q-learning with decay
+│   │   ├── q_learning/     # Simple Q-learning agent
+│   │   ├── greedy/         # Greedy baseline agents
+│   │   ├── tactical/       # Tactical decision-making agent
+│   │   ├── random/         # Random baseline agents
+│   │   ├── dqn/            # Deep Q-Network (needs PyTorch)
+│   │   └── ppo/            # PPO agent (needs PyTorch)
+│   ├── environments/       # RL environments
+│   │   ├── base.py         # Base environment class
+│   │   ├── standard.py     # Standard game environment
+│   │   ├── scenario.py     # Scenario-based training environment
+│   │   └── training.py     # Training environments with reward shaping
+│   ├── utils/              # Utilities and configurations
+│   ├── arena/              # Matchmaking and tournaments
+│   └── visualization/      # Display systems (ASCII, GUI)
+├── training/               # Training scripts and configurations
+│   ├── train_curriculum.py      # Main curriculum-based trainer
+│   ├── curriculum_config.py     # Curriculum phase definitions
+│   ├── training_scenarios.py    # 25+ training scenarios
+│   ├── train_simply.py          # Simple training without curriculum
+│   └── train.py                 # Alternative training script
+├── scripts/                # Demo and utility scripts
+│   ├── demo_game.py             # Interactive game visualization
+│   ├── demo_trained_agent.py    # Visualize trained agents
+│   ├── evaluate_agents.py       # Evaluate agent performance
+│   └── evaluate_tactical.py     # Tactical agent evaluation
+├── tests/                  # Test suite
+│   ├── test_comprehensive.py    # Full test suite (523 lines)
+│   ├── test_integration.py      # Integration tests
+│   ├── test_encoding.py         # Observation encoding tests
+│   └── test_game_setup.py       # Game setup tests
+├── models/                 # Saved trained models (.pkl files)
+├── logs/                   # Training logs and statistics
+├── CURRICULUM_GUIDE.md     # Comprehensive curriculum training guide
+├── SCENARIO_TRAINING_GUIDE.md  # 25+ scenario descriptions
+├── TRAINING_QUICK_REF.md   # Quick reference for training commands
 └── README.md
 ```
 
@@ -93,6 +104,50 @@ Ants receive observations as a 3-channel tensor:
 - **Channel 0**: Entity type (0=empty, 1=wall, 2=rock, 3=food, 4=ant, 5=anthill)
 - **Channel 1**: Team affiliation (-1=enemy, 0=neutral, 1=allied)
 - **Channel 2**: Mobility (0=blocked, 1=passable)
+
+See `src/agents/Observation encoding.md` for detailed documentation of the factored encoding system.
+
+## Curriculum & Scenario-Based Training
+
+The project includes a comprehensive curriculum training system with **25+ specialized training scenarios** and multiple training modes:
+
+### Training Modes:
+- **Hybrid Mode** (Recommended): Alternates between isolated scenario training and full opponent games
+- **Opponent Mode**: Traditional training against other agents
+- **Scenario Mode**: Focused skill development in simplified environments
+
+### Key Features:
+- Progressive difficulty through 6 training phases
+- Isolated scenarios for food collection, combat, anthill attacks, survival, maze navigation, and more
+- Automatic learning rate and epsilon decay schedules
+- Phase-based checkpointing and evaluation
+- Comprehensive performance tracking
+
+### Quick Training:
+```bash
+# Recommended: Hybrid curriculum training (10,000 episodes ≈ 45 minutes)
+python training/train_curriculum.py --mode hybrid --episodes 10000
+
+# Fast baseline training (1,000 episodes ≈ 3 minutes)
+python training/train_simply.py --episodes 1000
+
+# Other modes: rapid, basic, standard, intensive, specialized, scenario
+python training/train_curriculum.py --mode standard --episodes 5000
+```
+
+### Documentation:
+- **[CURRICULUM_GUIDE.md](CURRICULUM_GUIDE.md)** - Complete curriculum system guide with 8 predefined modes
+- **[SCENARIO_TRAINING_GUIDE.md](SCENARIO_TRAINING_GUIDE.md)** - Detailed descriptions of all 25+ scenarios
+- **[TRAINING_QUICK_REF.md](TRAINING_QUICK_REF.md)** - Quick reference card with commands
+
+### Available Agents:
+- **AdaptiveQLearningAgent**: Tabular Q-learning with adaptive decay (no dependencies)
+- **GreedyAgent**: Greedy baseline (food-focused, aggressive, defensive variants)
+- **TacticalAgent**: Multi-objective tactical decision-making
+- **RandomAgent**: Random baseline for benchmarking
+- **DQN/PPO**: Neural network agents (requires PyTorch)
+
+See **[AGENT_COMPARISON.md](AGENT_COMPARISON.md)** for detailed agent comparisons and when to use each.
 
 ## Creating Custom Agents
 
@@ -170,13 +225,15 @@ while not done:
 
 ## Future Work
 
-- [ ] Implement DQN agent
-- [ ] Implement PPO agent
+- [x] Implement DQN agent (requires PyTorch)
+- [x] Implement PPO agent (requires PyTorch)
+- [x] Create comprehensive training curricula with 25+ scenarios
 - [ ] Implement evolutionary strategies
-- [ ] Add GUI visualization
-- [ ] Create training curricula
-- [ ] Build tournament system
+- [ ] Complete GUI visualization (currently ASCII only)
+- [ ] Build automated tournament system
 - [ ] Add replay recording/playback
+- [ ] Expand neural network agent training (DQN/PPO optimization)
+- [ ] Add multi-agent cooperative training
 
 ## License
 

@@ -139,14 +139,14 @@ def get_anthill_attack_scenario(distance: str = "medium") -> TrainingScenario:
 
             # Place player anthill
             if distance_type == 'close':
-                game.anthills[0].position = Position(board_w // 2 - 3, board_h // 2)
-                game.anthills[1].position = Position(board_w // 2 + 3, board_h // 2)
+                game.board.anthills[0].position = Position(board_w // 2 - 3, board_h // 2)
+                game.board.anthills[1].position = Position(board_w // 2 + 3, board_h // 2)
             elif distance_type == 'medium':
-                game.anthills[0].position = Position(board_w // 4, board_h // 2)
-                game.anthills[1].position = Position(3 * board_w // 4, board_h // 2)
+                game.board.anthills[0].position = Position(board_w // 4, board_h // 2)
+                game.board.anthills[1].position = Position(3 * board_w // 4, board_h // 2)
             else:  # far
-                game.anthills[0].position = Position(2, 2)
-                game.anthills[1].position = Position(board_w - 3, board_h - 3)
+                game.board.anthills[0].position = Position(2, 2)
+                game.board.anthills[1].position = Position(board_w - 3, board_h - 3)
 
         return setup
 
@@ -279,15 +279,15 @@ def get_defense_scenario(attacker_count: int = 2) -> TrainingScenario:
     def setup_defense(game: Game):
         # Place player anthill in center
         board_w, board_h = game.config.board_width, game.config.board_height
-        game.anthills[0].position = Position(board_w // 2, board_h // 2)
+        game.board.anthills[0].position = Position(board_w // 2, board_h // 2)
 
         # Opponent anthill far away (not the objective)
-        game.anthills[1].position = Position(0, 0)
+        game.board.anthills[1].position = Position(0, 0)
 
         # Place enemy ants in a circle around player anthill
         center_x, center_y = board_w // 2, board_h // 2
         radius = 5
-        enemy_ants = [ant for ant in game.ants.values() if ant.player_id == 1]
+        enemy_ants = [ant for ant in game.board.ants.values() if ant.player_id == 1]
 
         for i, ant in enumerate(enemy_ants):
             angle = (i / len(enemy_ants)) * 2 * 3.14159
@@ -323,26 +323,26 @@ def get_maze_scenario() -> TrainingScenario:
         board_w, board_h = game.config.board_width, game.config.board_height
 
         # Place anthill at start
-        game.anthills[0].position = Position(1, 1)
-        game.anthills[1].position = Position(board_w - 2, board_h - 2)
+        game.board.anthills[0].position = Position(1, 1)
+        game.board.anthills[1].position = Position(board_w - 2, board_h - 2)
 
         # Create maze walls with rocks
         # Vertical walls
         for y in range(3, board_h - 3):
             if y != board_h // 2:  # Leave gaps
-                game.board[board_w // 3][y] = 'rock'
-                game.board[2 * board_w // 3][y] = 'rock'
+                game.board.add_rock(Position(board_w // 3, y))
+                game.board.add_rock(Position(2 * board_w // 3, y))
 
         # Horizontal walls
         for x in range(3, board_w - 3):
             if x != board_w // 2:
-                game.board[x][board_h // 3] = 'rock'
-                game.board[x][2 * board_h // 3] = 'rock'
+                game.board.add_rock(Position(x, board_h // 3))
+                game.board.add_rock(Position(x, 2 * board_h // 3))
 
         # Place food at the end
-        game.board[board_w - 2][board_h - 2] = 'food'
-        game.board[board_w - 3][board_h - 2] = 'food'
-        game.board[board_w - 2][board_h - 3] = 'food'
+        game.board.add_food(Position(board_w - 2, board_h - 2))
+        game.board.add_food(Position(board_w - 3, board_h - 2))
+        game.board.add_food(Position(board_w - 2, board_h - 3))
 
     return TrainingScenario(
         name="maze_navigation",
@@ -369,11 +369,11 @@ def get_food_race_scenario() -> TrainingScenario:
         board_w, board_h = game.config.board_width, game.config.board_height
 
         # Place anthills at opposite sides
-        game.anthills[0].position = Position(2, board_h // 2)
-        game.anthills[1].position = Position(board_w - 3, board_h // 2)
+        game.board.anthills[0].position = Position(2, board_h // 2)
+        game.board.anthills[1].position = Position(board_w - 3, board_h // 2)
 
         # Place single food in center
-        game.board[board_w // 2][board_h // 2] = 'food'
+        game.board.add_food(Position(board_w // 2, board_h // 2))
 
     return TrainingScenario(
         name="food_race",
