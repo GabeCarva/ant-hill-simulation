@@ -1,5 +1,5 @@
 """Greedy heuristic-based agents."""
 
-from src.agents.greedy.agent import GreedyAgent, GreedyAggressiveAgent, GreedyDefensiveAgent
+from src.agents.greedy.agent import GreedyAgent, AggressiveGreedyAgent, DefensiveGreedyAgent
 
-__all__ = ['GreedyAgent', 'GreedyAggressiveAgent', 'GreedyDefensiveAgent']
+__all__ = ['GreedyAgent', 'AggressiveGreedyAgent', 'DefensiveGreedyAgent']

@@ -14,7 +14,7 @@ This package contains various agent types that can control ants:
 from src.agents.base import BaseAgent, AntObservation, AgentWrapper
 from src.agents.adaptive_q_learning.agent import AdaptiveQLearningAgent
 from src.agents.q_learning.agent import SimpleQLearningAgent
-from src.agents.greedy.agent import GreedyAgent, GreedyAggressiveAgent, GreedyDefensiveAgent
+from src.agents.greedy.agent import GreedyAgent, AggressiveGreedyAgent, DefensiveGreedyAgent
 from src.agents.tactical.agent import TacticalAgent
 from src.agents.random.agent import RandomAgent, SmartRandomAgent
 
@@ -25,8 +25,8 @@ __all__ = [
     'AdaptiveQLearningAgent',
     'SimpleQLearningAgent',
     'GreedyAgent',
-    'GreedyAggressiveAgent',
-    'GreedyDefensiveAgent',
+    'AggressiveGreedyAgent',
+    'DefensiveGreedyAgent',
     'TacticalAgent',
     'RandomAgent',
     'SmartRandomAgent',
