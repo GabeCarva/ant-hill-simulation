@@ -18,7 +18,9 @@ class GameState:
     board: Board
     food_collected: Dict[int, int]  # player_id -> food count
     ants_lost: Dict[int, int]  # player_id -> ants lost count
-    
+    distance_traveled: Dict[int, int] = None  # player_id -> total distance
+    win_condition: Optional[str] = None  # 'anthill_kill', 'anthill_suicide', 'timeout'
+
     def is_terminal(self) -> bool:
         return self.winner is not None
 
@@ -38,6 +40,8 @@ class Game:
         # Statistics
         self.food_collected = defaultdict(int)
         self.ants_lost = defaultdict(int)
+        self.distance_traveled = defaultdict(int)  # Total distance traveled per player
+        self.win_condition = None  # 'anthill_kill', 'anthill_suicide', 'timeout', or None
         
         # Action queue for simultaneous movement
         self.pending_actions: Dict[int, int] = {}  # ant_id -> action
@@ -108,7 +112,9 @@ class Game:
             winner=self.winner,
             board=self.board,
             food_collected={0: self.food_collected[0], 1: self.food_collected[1]},
-            ants_lost={0: self.ants_lost[0], 1: self.ants_lost[1]}
+            ants_lost={0: self.ants_lost[0], 1: self.ants_lost[1]},
+            distance_traveled={0: self.distance_traveled[0], 1: self.distance_traveled[1]},
+            win_condition=self.win_condition
         )
     
     def get_ant_observation(self, ant: Ant) -> Dict:
@@ -178,11 +184,13 @@ class Game:
                     # Enemy ant reached anthill - game over
                     anthill.alive = False
                     self.winner = ant.player_id  # Ant's player wins
+                    self.win_condition = 'anthill_kill'
                     break
                 else:
                     # Ant stepped on own anthill - that player loses!
                     anthill.alive = False
                     self.winner = 1 - ant.player_id  # Other player wins
+                    self.win_condition = 'anthill_suicide'
                     break
             
             # Check for food collection
@@ -200,8 +208,11 @@ class Game:
                 if spawn_pos:
                     self.board.add_ant(spawn_pos, ant.player_id)
             
-            # Move ant
+            # Move ant and track distance
             if ant.ant_id not in ants_to_remove:
+                # Calculate distance traveled (Chebyshev distance for 8-directional movement)
+                distance = max(abs(new_pos.x - ant.position.x), abs(new_pos.y - ant.position.y))
+                self.distance_traveled[ant.player_id] += distance
                 self.board.move_ant(ant, new_pos)
         
         # Phase 4: Remove dead ants and spawn collision food
@@ -222,6 +233,7 @@ class Game:
         # Check for draw condition
         if self.config.max_turns is not None and self.turn >= self.config.max_turns:
             # Game ends - winner is player with most food collected
+            self.win_condition = 'timeout'
             if self.food_collected[0] > self.food_collected[1]:
                 self.winner = 0
             elif self.food_collected[1] > self.food_collected[0]:

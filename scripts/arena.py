@@ -149,6 +149,9 @@ def run_single_game(
         'food_1': env.game.food_collected[1],
         'ants_lost_0': env.game.ants_lost[0],
         'ants_lost_1': env.game.ants_lost[1],
+        'distance_0': env.game.distance_traveled[0],
+        'distance_1': env.game.distance_traveled[1],
+        'win_condition': env.game.win_condition,
     }
 
 
@@ -254,9 +257,11 @@ def run_arena(
             print(f"GAME {game_num} RESULT: {outcome}")
             print(f"{'=' * 70}")
             print(f"Winner: {'Your Agent (P0)' if result['winner'] == 0 else ('Opponent (P1)' if result['winner'] == 1 else 'Draw')}")
+            print(f"Win Condition: {result['win_condition']}")
             print(f"Food: P0={result['food_0']}, P1={result['food_1']}")
             print(f"Turns: {result['turns']}")
             print(f"Ants Lost: P0={result['ants_lost_0']}, P1={result['ants_lost_1']}")
+            print(f"Distance Traveled: P0={result['distance_0']}, P1={result['distance_1']}")
             if game_num < num_games:
                 input("\nPress Enter to continue to next game...")
 
@@ -275,19 +280,37 @@ def run_arena(
     print(f"   Losses: {losses:3d} / {total} ({loss_rate:5.1f}%)")
     print(f"   Draws:  {draws:3d} / {total} ({draw_rate:5.1f}%)")
 
+    # Win condition breakdown
+    win_conditions = {}
+    for r in results:
+        wc = r['win_condition']
+        win_conditions[wc] = win_conditions.get(wc, 0) + 1
+
+    print(f"\n🎯 Win Condition Breakdown:")
+    if 'anthill_kill' in win_conditions:
+        print(f"   Anthill Destroyed:   {win_conditions['anthill_kill']:3d} ({win_conditions['anthill_kill']/total*100:5.1f}%)")
+    if 'anthill_suicide' in win_conditions:
+        print(f"   Anthill Suicide:     {win_conditions['anthill_suicide']:3d} ({win_conditions['anthill_suicide']/total*100:5.1f}%)")
+    if 'timeout' in win_conditions:
+        print(f"   Timeout (Food Win):  {win_conditions['timeout']:3d} ({win_conditions['timeout']/total*100:5.1f}%)")
+
     # Detailed statistics
     avg_food_0 = sum(r['food_0'] for r in results) / total
     avg_food_1 = sum(r['food_1'] for r in results) / total
     avg_turns = sum(r['turns'] for r in results) / total
     avg_ants_lost_0 = sum(r['ants_lost_0'] for r in results) / total
     avg_ants_lost_1 = sum(r['ants_lost_1'] for r in results) / total
+    avg_distance_0 = sum(r['distance_0'] for r in results) / total
+    avg_distance_1 = sum(r['distance_1'] for r in results) / total
 
     print(f"\n📈 Average Statistics:")
-    print(f"   Your Agent Food:     {avg_food_0:.1f}")
-    print(f"   Opponent Food:       {avg_food_1:.1f}")
-    print(f"   Game Length:         {avg_turns:.1f} turns")
-    print(f"   Your Ants Lost:      {avg_ants_lost_0:.1f}")
-    print(f"   Opponent Ants Lost:  {avg_ants_lost_1:.1f}")
+    print(f"   Your Agent Food:        {avg_food_0:.1f}")
+    print(f"   Opponent Food:          {avg_food_1:.1f}")
+    print(f"   Game Length:            {avg_turns:.1f} turns")
+    print(f"   Your Ants Lost:         {avg_ants_lost_0:.1f}")
+    print(f"   Opponent Ants Lost:     {avg_ants_lost_1:.1f}")
+    print(f"   Your Distance Traveled: {avg_distance_0:.1f}")
+    print(f"   Opp Distance Traveled:  {avg_distance_1:.1f}")
 
     # Performance summary
     print(f"\n🏆 Performance Summary:")
