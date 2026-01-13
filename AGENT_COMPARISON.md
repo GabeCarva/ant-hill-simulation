@@ -9,8 +9,8 @@ This guide compares all available agent types in the ant hill simulation, helpin
 | **RandomAgent** | Baseline | None | N/A | Very Low | Benchmarking |
 | **SmartRandomAgent** | Heuristic | None | N/A | Low | Better baseline |
 | **GreedyAgent** | Heuristic | None | N/A | Medium | Food collection |
-| **GreedyAggressiveAgent** | Heuristic | None | N/A | Medium | Early aggression |
-| **GreedyDefensiveAgent** | Heuristic | None | N/A | Medium | Defensive play |
+| **AggressiveGreedyAgent** | Heuristic | None | N/A | Medium | Early aggression |
+| **DefensiveGreedyAgent** | Heuristic | None | N/A | Medium | Defensive play |
 | **TacticalAgent** | Heuristic | None | N/A | Medium-High | Balanced strategy |
 | **SimpleQLearningAgent** | RL (Tabular) | None | Fast (5-10 min) | Low-Medium | Learning basics |
 | **AdaptiveQLearningAgent** | RL (Tabular) | None | Medium (30-60 min) | Medium-High | Best Q-learning |
@@ -115,7 +115,7 @@ agent = GreedyAgent(player_id=0)
 
 ---
 
-### GreedyAggressiveAgent
+### AggressiveGreedyAgent
 **Type:** Heuristic (combat-focused)
 
 **Description:** Prioritizes attacking enemy anthill and ants over food collection.
@@ -140,14 +140,14 @@ agent = GreedyAgent(player_id=0)
 
 **Usage:**
 ```python
-from src.agents import GreedyAggressiveAgent
+from src.agents import AggressiveGreedyAgent
 
-agent = GreedyAggressiveAgent(player_id=0)
+agent = AggressiveGreedyAgent(player_id=0)
 ```
 
 ---
 
-### GreedyDefensiveAgent
+### DefensiveGreedyAgent
 **Type:** Heuristic (defensive)
 
 **Description:** Balances food collection with staying near own anthill for defense.
@@ -172,9 +172,9 @@ agent = GreedyAggressiveAgent(player_id=0)
 
 **Usage:**
 ```python
-from src.agents import GreedyDefensiveAgent
+from src.agents import DefensiveGreedyAgent
 
-agent = GreedyDefensiveAgent(player_id=0)
+agent = DefensiveGreedyAgent(player_id=0)
 ```
 
 ---
